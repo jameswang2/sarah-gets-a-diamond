@@ -5,12 +5,18 @@ The basis for the data is a case regarding a hopeless romantic MBA student choos
 the right diamond for his bride-to-be, Sarah.
 
 ## Table of Contents
+ - [Following Along](#following-along)
  - [System Setup](#system-setup)
    - [Installing R and RStudio](#installing-r-and-rstudio)
    - [Installing R Packages](#installing-r-packages)
- - [Following Along](#following-along)
  - [The Data](#the-data)
  - [Source](#source)
+ 
+### Following Along
+The best way to learn from this session is to open up RStudio and follow along 
+with the script [`diamond-analysis.md`](diamond-analysis.md). Simply copy-paste 
+the commands from the script into your R Console and see what they do. Keep reading 
+for more information on setting up your computer to run R and RStudio.
  
 ### System Setup
 The R programming language will be utilized in this analysis of diamonds. Using 
@@ -54,11 +60,6 @@ install.packages("randomForest")
 install.packages("gbm")
 install.packages("here")
 ```
-
-### Following Along
-The best way to learn from this session is to open up RStudio and follow along 
-with the script [`diamond-analysis.md`](diamond-analysis.md). Simply copy-paste 
-the commands from the script into your console and see what they do.
 
 ### The Data
 The data contains 9,142 records on individual diamonds and their attributes. The 
