@@ -1,7 +1,7 @@
 #' ---
 #' title: "Sarah Gets a Diamond"
 #' author: "Dang Trinh" 
-#' date: 2018-04-11
+#' date: "April 11, 2018"
 #' output: 
 #'   github_document: 
 #'     toc: true
@@ -9,7 +9,7 @@
 #' ---
 
 #+ setup, include=FALSE
-knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE, warning = FALSE, message = FALSE)
 
 
 #' # Environment Setup
@@ -32,7 +32,7 @@ install.packages("gbm")
 #' at the beginning of your script so that others can know what packages they need 
 #' to replicate your analysis.
 
-#+ load-packages, warning=FALSE, message=FALSE
+#+ load-packages
 options(scipen=999, digits=6)
 library(here)
 library(Lahman)
@@ -55,7 +55,7 @@ library(gbm)
 #library(tree)
 
 
-#+ create-output-folder, warning=FALSE, message=FALSE
+#+ create-output-folder
 # create a folder to save our analyses, underlying data
 todays_date_formatted <- format(Sys.Date(), '%Y%m%d')
 dir.create(here::here('output', todays_date_formatted), showWarnings = FALSE)
@@ -205,10 +205,11 @@ model_formula <- "LPrice ~ LCarat +  recipCarat + Cut + Color + Clarity + Polish
                            Caratequal1.5 + Caratbelow2 + Caratabove2"
 
 
-#+ autofitting-rpart-tree, warning=FALSE
+#+ autofitting-rpart-tree
 rt.auto.cv <- rpart(model_formula, data = diamond.train, 
                     control = rpart.control(cp = 0.000001, xval = 10))  # xval is number of folds in the K-fold cross-validation.
-printcp(rt.auto.cv)  # Print out the cp table of cross-validation errors. 
+#printcp(rt.auto.cv)  # Print out the cp table of cross-validation errors.
+
 #The R-squared for a regression tree is 1 minus rel error. 
 #xerror (or relative cross-validation error where "x" stands for "cross") is a scaled 
 #version of overall average of the 5 out-of-sample MSEs across the 5 folds. 
@@ -234,10 +235,9 @@ prp(rt.tuned.opt.cv, type = 1, extra = 1)
 importance <- as.data.frame(rt.tuned.opt.cv$variable.importance)
 importance
 
-rt.tuned.opt.cv.pred <- predict(rt.tuned.opt.cv, diamond.test)
-
 
 #+ rpart-accuracy
+rt.tuned.opt.cv.pred <- predict(rt.tuned.opt.cv, diamond.test)
 accuracy(exp(rt.tuned.opt.cv.pred), diamond.test$Price)
 
 
@@ -245,7 +245,7 @@ accuracy(exp(rt.tuned.opt.cv.pred), diamond.test$Price)
 #' than the model above. These trees have much larger cp parameters and as such have 
 #' much fewer layers, which aids with interpretability.
 
-#+ fitting-simple-rpart-trees, warning=FALSE
+#+ fitting-simple-rpart-trees
 # fitting four simple trees using different complexity parameters
 rt.simple.tree1 <- rpart(model_formula, data = diamond.train, 
                          control = rpart.control(cp = 0.005))
@@ -257,7 +257,9 @@ rt.simple.tree4 <- rpart(model_formula, data = diamond.train,
                          control = rpart.control(cp = 0.0001))
 
 
-#+ saving-off-rpart-data-and-pdfs, warning=FALSE, results='hide'
+#' Plots of the trees and diagnostics are available in the `output` folder of this analysis.
+
+#+ saving-off-rpart-data-and-pdfs, include=FALSE
 write.csv(rt.tuned.opt.cv.pred, 
           file=here::here("output", todays_date_formatted, 
                           sprintf("k-fold-optim-cp-reg-tree_%s.csv", todays_date_formatted)))
@@ -336,9 +338,6 @@ trainx <- diamond.smaller.train[,c("LCarat", "recipCarat", "Cut", "Color", "Clar
 trainy <- diamond.smaller.train$LPrice
 random.forest.cv <- rfcv(trainx, trainy,
                          cv.folds = 10, scale="unit", step=-1, ntree=100)
-
-
-#+ pick-optimum-rf-model
 plot(x=1:14, y=rev(random.forest.cv$error.cv),
      xlab="mtry parameter", ylab="Cross Validation Error",
      main="Random Forest Cross Validation Results")
@@ -395,8 +394,9 @@ accuracy(exp(random.forest.cv.1.pred), diamond.test$Price)
 #' validation to identify the best value for the parameter `n.trees`, which turns out 
 #' to be 5,207.
 
-#+  warning=FALSE, message=FALSE
+#+ 
 boost <- gbm(as.formula(model_formula), data=diamond.smaller.train,
+             distribution = "gaussian",
              n.trees=100, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
 plot(boost$cv.error)
 best_iteration <- which(boost$cv.error==min(boost$cv.error))
@@ -408,8 +408,9 @@ best_iteration <- which(boost$cv.error==min(boost$cv.error))
 #' better even at the 100th iteration. More iterations might help us find the true 
 #' optimum number of trees to minimize prediction error.
 
-#+  warning=FALSE, message=FALSE
+#+ 
 boost.cv <- gbm(as.formula(model_formula), data=diamond.smaller.train,
+                distribution = "gaussian",
                 n.trees=best_iteration, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
 boost.cv.pred.valid <- predict(boost.cv, newdata=diamond.validation, n.trees=best_iteration)
 accuracy(exp(boost.cv.pred.valid), diamond.validation$Price)
@@ -419,11 +420,13 @@ accuracy(exp(boost.cv.pred.valid), diamond.validation$Price)
 #' cross validation. Cross validation shows that 100 is the best value for `n.trees`, 
 #' and using this parameter yields a MAPE of 4.23808% on the test set.
 
-#+  eval=FALSE, warning=FALSE, message=FALSE
+#+  eval=FALSE
 boost <- gbm(as.formula(model_formula), data=diamond.train,
+             distribution = "gaussian",
              n.trees=100, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
 best_iteration <- which(boost$cv.error==min(boost$cv.error))
 boost.cv <- gbm(as.formula(model_formula), data=diamond.train,
+                distribution = "gaussian",
                 n.trees=best_iteration, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
 boost.cv.pred <- predict(boost.cv, newdata=diamond.test, n.trees=best_iteration)
 accuracy(exp(boost.cv.pred), diamond.test$Price)
@@ -451,7 +454,7 @@ lm <- lm(as.formula(lm_formula), data = diamond.full.smaller.train)
 summary(lm)
 
 
-#+ eval-lm-model, warning=FALSE
+#+ eval-lm-model
 lm.pred.valid <- predict(lm, diamond.full.validation)
 accuracy(exp(lm.pred.valid), diamond.full.validation$Price)
 
@@ -482,7 +485,7 @@ lm.regularized.cv <- cv.glmnet(xtrain, ytrain,
                                nfolds = 10, family = "gaussian", alpha=1)
 
 
-#+  warning=FALSE
+#+ 
 lm.regularized.cv$lambda.min
 (minLogLambda <- log(lm.regularized.cv$lambda.min))
 coef(lm.regularized.cv, s = "lambda.min")  
@@ -515,7 +518,7 @@ lm.regularized.cv <- cv.glmnet(xtrain, ytrain,
                                nfolds = 10, family = "gaussian", alpha=1)  # Fits the Lasso.
 
 
-#+  warning=FALSE
+#+ 
 lm.regularized.cv$lambda.min
 (minLogLambda <- log(lm.regularized.cv$lambda.min))
 coef(lm.regularized.cv, s = "lambda.min")  
