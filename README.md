@@ -1,4 +1,4 @@
-# sarah-gets-a-diamond <img src="doc/diamonds.png" width="150px" align="right" />
+# sarah-gets-a-diamond <img src="doc/diamonds.png" width="400px" align="right" />
 A repository of R code regarding ways to analyze data from a case (UVA-QA-0702) 
 presented in the First Year Decision Analysis course at Darden. The basis for the 
 data is a case regarding a hopeless romantic MBA student choosing the right diamond 
