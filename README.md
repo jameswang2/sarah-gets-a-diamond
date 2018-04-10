@@ -61,7 +61,7 @@ data are split into 6,000 records labeled as "Train" meant to be used when
 building models and the remaining 3,142 records are labeled as "Test" and meant 
 to be used in assessing model accuracy
 
-Variable | Datatype | Definition
+Variable | Data Type | Data Definition
 ---|---|---------
 ID | integer | Uniquely identifies each observation (diamond)
 Carat Weight | numeric | The weight of the diamond in metric carats. One carat is equal to 0.2 grams, roughly the same weight as a paperclip
