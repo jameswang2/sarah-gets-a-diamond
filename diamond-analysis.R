@@ -1,7 +1,6 @@
 #' ---
 #' title: "Sarah Gets a Diamond"
-#' author: "Dang Trinh"  
-#' date: "April 11, 2018"  
+#' author: "Dang Trinh - April 11, 2018"  
 #' output: 
 #'   github_document: 
 #'     toc: true

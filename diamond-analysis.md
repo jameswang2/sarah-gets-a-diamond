@@ -1,7 +1,6 @@
 Sarah Gets a Diamond
 ================
-Dang Trinh
-April 11, 2018
+Dang Trinh - April 11, 2018
 
 -   [Environment Setup](#environment-setup)
 -   [Data Wrangling](#data-wrangling)
