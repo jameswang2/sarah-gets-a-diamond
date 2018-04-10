@@ -22,7 +22,7 @@ You can load a package by using the `library()` function as shown below, but you
 must first install the package. You can install a package by using the `install.packages()` 
 function like so:
 
-``````{r install-packages, eval=FALSE}
+```{r install-packages, eval=FALSE}
 install.packages("gbm")
 ```
 
