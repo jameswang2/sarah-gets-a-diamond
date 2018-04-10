@@ -1,13 +1,14 @@
-# sarah-gets-a-diamond <img src="doc/diamonds.png" width="400px" align="right" />
-A repository of R code regarding ways to analyze data from a case (UVA-QA-0702) 
-presented in the First Year Decision Analysis course at Darden. The basis for the 
-data is a case regarding a hopeless romantic MBA student choosing the right diamond 
-for his bride-to-be, Sarah.
+# Sarah Gets A Diamond <img src="doc/diamonds.png" width="400px" align="right" />
+A repository of R code regarding ways to analyze data from the *Sarah Gets a Diamond* 
+case (UVA-QA-0702) presented in the First Year Decision Analysis course at Darden. 
+The basis for the data is a case regarding a hopeless romantic MBA student choosing 
+the right diamond for his bride-to-be, Sarah.
 
 ## Table of Contents
  - [System Setup](#system-setup)
    - [Installing R and RStudio](#installing-r-and-rstudio)
    - [Installing R Packages](#installing-r-packages)
+ - [Following Along](#following-along)
  - [The Data](#the-data)
  - [Source](#source)
  
@@ -51,7 +52,13 @@ install.packages("rpart.plot")
 install.packages("glmnet")
 install.packages("randomForest")
 install.packages("gbm")
+install.packages("here")
 ```
+
+### Following Along
+The best way to learn from this session is to open up RStudio and follow along 
+with the script [`diamond-analysis.md`](diamond-analysis.md). Simply copy-paste 
+the commands from the script into your console and see what they do.
 
 ### The Data
 The data contains 9,142 records on individual diamonds and their attributes. The 
@@ -73,6 +80,16 @@ Symmetry | character | One of four values indicating the diamond's symmetry (`ID
 Report | character | One of of two values `"AGSL"` or `"GIA"` indicating which grading agency reported the qualities of the diamond qualities
 Price | numeric | The amount in USD that the diamond is valued
 Dataset | character | One of two values `"Train"` or `"Test"` indicating whether the observation should be used to train the model or in a test of its accuracy
+
+### Converting Rmd to R Script
+The file entitled `"diamond-analysis.Rmd"` was converted into a `.R` script by using 
+the nifty function backstich created by Garrick Aden-Blue and written about on his [blog](https://www.garrickadenbuie.com/blog/2017/10/17/convert-r-markdown-rmd-files-to-r-scripts/). Specifically the commands we used were:
+
+```
+devtools::source_gist('284671997992aefe295bed34bb53fde6', filename = 'backstitch.R')
+output <- backstitch("diamond-analysis.Rmd", output_type = 'script', chunk_header = "#+")
+cat(output, file="diamond-analysis.R", sep = "\n")
+```
 
 ### Source
 This case was prepared by Greg Mills (MBA ’07) under the supervision of Phillip E. 
