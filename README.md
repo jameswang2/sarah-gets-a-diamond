@@ -65,12 +65,12 @@ Variable | Datatype | Definition
 ---|---|---------
 ID | integer | Uniquely identifies each observation (diamond)
 Carat Weight | numeric | The weight of the diamond in metric carats. One carat is equal to 0.2 grams, roughly the same weight as a paperclip
-Cut | One of five values indicating the cut of the diamond in the following order of desireability (`Signature-Ideal`, `Ideal`, `Very Good`, `Good`, `Fair`)
-Color | One of six values indicating the diamond's color in the following order of desireability (`D`, `E`, `F` - Colorless, `G`, `H`, `I` - Near colorless)
-Clarity | One of seven values indicating the diamond's clarity in the following order of desireability (`F` - Flawless, `IF` - Internally Flawless, `VVS1` or `VVS2` - Very, Very Slightly Included, or `VS1` or `VS2` - Very Slightly Included, `SI1` - Slightly Included)
-Polish | One of four values indicating the diamond's polish (`ID` - Ideal, `EX` - Excellent, `VG` - Very Good, `G` - Good)
-Symmetry | One of four values indicating the diamond's symmetry (`ID` - Ideal, `EX` - Excellent, `VG` - Very Good, `G` - Good)
-Report | One of of two values `"AGSL"` or `"GIA"` indicating which grading agency reported the qualities of the diamond qualities
+Cut | character | One of five values indicating the cut of the diamond in the following order of desireability (`Signature-Ideal`, `Ideal`, `Very Good`, `Good`, `Fair`)
+Color | character | One of six values indicating the diamond's color in the following order of desireability (`D`, `E`, `F` - Colorless, `G`, `H`, `I` - Near colorless)
+Clarity | character | One of seven values indicating the diamond's clarity in the following order of desireability (`F` - Flawless, `IF` - Internally Flawless, `VVS1` or `VVS2` - Very, Very Slightly Included, or `VS1` or `VS2` - Very Slightly Included, `SI1` - Slightly Included)
+Polish | character | One of four values indicating the diamond's polish (`ID` - Ideal, `EX` - Excellent, `VG` - Very Good, `G` - Good)
+Symmetry | character | One of four values indicating the diamond's symmetry (`ID` - Ideal, `EX` - Excellent, `VG` - Very Good, `G` - Good)
+Report | character | One of of two values `"AGSL"` or `"GIA"` indicating which grading agency reported the qualities of the diamond qualities
 Price | numeric | The amount in USD that the diamond is valued
 Dataset | character | One of two values `"Train"` or `"Test"` indicating whether the observation should be used to train the model or in a test of its accuracy
 
