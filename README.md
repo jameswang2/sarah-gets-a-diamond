@@ -82,7 +82,8 @@ Price | numeric | The amount in USD that the diamond is valued
 Dataset | character | One of two values `"Train"` or `"Test"` indicating whether the observation should be used to train the model or in a test of its accuracy
 
 ### Converting Rmd to R Script
-The file entitled `"diamond-analysis.Rmd"` was converted into a `.R` script by using 
+If you would like a `.R` file that contains just the source code without annotations, 
+it is available at [`diamond-analysis.R`](diamond-analysis.R). The file entitled `"diamond-analysis.Rmd"` was converted into this `.R` script by using 
 the nifty function backstich created by Garrick Aden-Blue and written about on his [blog](https://www.garrickadenbuie.com/blog/2017/10/17/convert-r-markdown-rmd-files-to-r-scripts/). Specifically the commands we used were:
 
 ```
