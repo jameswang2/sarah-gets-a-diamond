@@ -1,4 +1,4 @@
-# sarah-gets-a-diamond
+# sarah-gets-a-diamond <img src="doc/diamonds.png" width="150px" align="right" />
 A repository of R code regarding ways to analyze data from a case (UVA-QA-0702) 
 presented in the First Year Decision Analysis course at Darden. The basis for the 
 data is a case regarding a hopeless romantic MBA student choosing the right diamond 
@@ -6,6 +6,8 @@ for his bride-to-be, Sarah.
 
 ## Table of Contents
  - [System Setup](#system-setup)
+   - [Installing R and RStudio](#installing-r-and-rstudio)
+   - [Installing R Packages](#installing-r-packages)
  - [The Data](#the-data)
  - [Source](#source)
  
@@ -14,6 +16,7 @@ The R programming language will be utilized in this analysis of diamonds. Using
 R requires installing it locally on your computer and some basic knowledge to run 
 the code that performs the analysis.
 
+#### Installing R and RStudio
 First, install [R](http://www.r-project.org/) and [RStudio](https://www.rstudio.com/products/rstudio/#Desktop). 
 There are some instructions available [here](http://stat545.com/block000_r-rstudio-install.html) to 
 aid in the installation process. RStudio is called an "IDE", or interactive development environment, 
@@ -23,6 +26,7 @@ RStudio. Once you've installed R and RStudio you may want to review some materia
 to understand how to use it. The article [R basics, workspace and working directory, RStudio projects](http://stat545.com/block002_hello-r-workspace-wd-project.html) provides a 
 very good introduction to using R.
 
+#### Installing R Packages
 Second, R uses "packages" of functions that people develop to perform very specific 
 routines in R, like fitting a decision tree. These packages must be installed before 
 referencing them, so in order to run code in this repository you must first open 
@@ -59,24 +63,16 @@ to be used in assessing model accuracy
 
 Variable | Datatype | Definition
 ---|---|---------
-ID | integer  | Uniquely identifies each observation (diamond)
-Carat Weight | numeric | The weight of the diamond in metric carats. One carat is 
-equal to 0.2 grams, roughly the same weight as a paperclip
-Cut | One of five values indicating the cut of the diamond in the following order of 
-desireability (`Signature-Ideal`, `Ideal`, `Very Good`, `Good`, `Fair`)
-Color | One of six values indicating the diamond's color in the following 
-order of desireability (`D`, `E`, `F` - Colorless, `G`, `H`, `I` - Near colorless)
-Clarity | One of seven values indicating the diamond's clarity in the following 
-order of desireability (`F` - Flawless, `IF` - Internally Flawless, `VVS1` or 
-`VVS2` - Very, Very Slightly Included, or `VS1` or `VS2` - Very Slightly Included, 
-`SI1` - Slightly Included)
+ID | integer | Uniquely identifies each observation (diamond)
+Carat Weight | numeric | The weight of the diamond in metric carats. One carat is equal to 0.2 grams, roughly the same weight as a paperclip
+Cut | One of five values indicating the cut of the diamond in the following order of desireability (`Signature-Ideal`, `Ideal`, `Very Good`, `Good`, `Fair`)
+Color | One of six values indicating the diamond's color in the following order of desireability (`D`, `E`, `F` - Colorless, `G`, `H`, `I` - Near colorless)
+Clarity | One of seven values indicating the diamond's clarity in the following order of desireability (`F` - Flawless, `IF` - Internally Flawless, `VVS1` or `VVS2` - Very, Very Slightly Included, or `VS1` or `VS2` - Very Slightly Included, `SI1` - Slightly Included)
 Polish | One of four values indicating the diamond's polish (`ID` - Ideal, `EX` - Excellent, `VG` - Very Good, `G` - Good)
 Symmetry | One of four values indicating the diamond's symmetry (`ID` - Ideal, `EX` - Excellent, `VG` - Very Good, `G` - Good)
-Report | One of of two values `"AGSL"` or `"GIA"` indicating which grading agency reported 
-the qualities of the diamond qualities
+Report | One of of two values `"AGSL"` or `"GIA"` indicating which grading agency reported the qualities of the diamond qualities
 Price | numeric | The amount in USD that the diamond is valued
-Dataset | character | One of two values `"Train"` or `"Test"` indicating whether the 
-observation should be used to train the model or in a test of its accuracy
+Dataset | character | One of two values `"Train"` or `"Test"` indicating whether the observation should be used to train the model or in a test of its accuracy
 
 ### Source
 This case was prepared by Greg Mills (MBA ’07) under the supervision of Phillip E. 
