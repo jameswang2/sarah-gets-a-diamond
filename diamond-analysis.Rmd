@@ -24,6 +24,7 @@ function like so:
 
 ```{r install-packages, eval=FALSE}
 install.packages("gbm")
+install.packages("here")
 ```
 
 After installing all of the packages listed below, then load them up by running 
@@ -183,6 +184,68 @@ plot(x=diamond$LCarat, y=diamond$LPrice,
 
 # Building Predictive Models
 
+
+## Regression Models
+
+Another class of model we could use is linear regression model. In this section 
+we will use several approaches to calibrate our linear regression model.
+
+### Backward Step-Wise Linear Regression
+
+We start by including all categorical variables & possible interactions in our 
+linear model. This yields a MAPE of 5.34222% on the validation set.
+
+```{r define-lm-formula}
+lm_formula <- "LPrice ~ LCarat+recipCarat+Caratbelow1+Caratequal1+Caratbelow1.5+Caratequal1.5+Caratbelow2+Caratabove2+CutFair+CutGood+CutIdeal+CutSignatureIdeal+CutVeryGood+ColorE+ColorF+ColorG+ColorH+ColorI+ClarityIF+ClaritySI1+ClarityVS1+ClarityVS2+ClarityVVS1+ClarityVVS2+PolishG+PolishID+PolishVG+SymmetryG+SymmetryID+SymmetryVG+ReportGIA+CutGood:ColorE+CutIdeal:ColorE+CutSignatureIdeal:ColorE+CutVeryGood:ColorE+CutGood:ColorF+CutIdeal:ColorF+CutSignatureIdeal:ColorF+CutVeryGood:ColorF+CutGood:ColorG+CutIdeal:ColorG+CutSignatureIdeal:ColorG+CutVeryGood:ColorG+CutGood:ColorH+CutIdeal:ColorH+CutSignatureIdeal:ColorH+CutVeryGood:ColorH+CutGood:ColorI+CutIdeal:ColorI+CutSignatureIdeal:ColorI+CutVeryGood:ColorI+CutGood:ClarityIF+CutIdeal:ClarityIF+CutSignatureIdeal:ClarityIF+CutVeryGood:ClarityIF+CutGood:ClaritySI1+CutIdeal:ClaritySI1+CutSignatureIdeal:ClaritySI1+CutVeryGood:ClaritySI1+CutGood:ClarityVS1+CutIdeal:ClarityVS1+CutSignatureIdeal:ClarityVS1+CutVeryGood:ClarityVS1+CutGood:ClarityVS2+CutIdeal:ClarityVS2+CutSignatureIdeal:ClarityVS2+CutVeryGood:ClarityVS2+CutGood:ClarityVVS1+CutIdeal:ClarityVVS1+CutSignatureIdeal:ClarityVVS1+CutVeryGood:ClarityVVS1+CutGood:ClarityVVS2+CutIdeal:ClarityVVS2+CutSignatureIdeal:ClarityVVS2+CutVeryGood:ClarityVVS2+CutGood:PolishG+CutIdeal:PolishG+CutSignatureIdeal:PolishG+CutVeryGood:PolishG+CutGood:PolishID+CutIdeal:PolishID+CutSignatureIdeal:PolishID+CutVeryGood:PolishID+CutGood:PolishVG+CutIdeal:PolishVG+CutSignatureIdeal:PolishVG+CutVeryGood:PolishVG+CutGood:SymmetryG+CutIdeal:SymmetryG+CutSignatureIdeal:SymmetryG+CutVeryGood:SymmetryG+CutGood:SymmetryID+CutIdeal:SymmetryID+CutSignatureIdeal:SymmetryID+CutVeryGood:SymmetryID+CutGood:SymmetryVG+CutIdeal:SymmetryVG+CutSignatureIdeal:SymmetryVG+CutVeryGood:SymmetryVG+CutGood:ReportGIA+CutIdeal:ReportGIA+CutSignatureIdeal:ReportGIA+CutVeryGood:ReportGIA+ColorE:ClarityIF+ColorF:ClarityIF+ColorG:ClarityIF+ColorH:ClarityIF+ColorI:ClarityIF+ColorE:ClaritySI1+ColorF:ClaritySI1+ColorG:ClaritySI1+ColorH:ClaritySI1+ColorI:ClaritySI1+ColorE:ClarityVS1+ColorF:ClarityVS1+ColorG:ClarityVS1+ColorH:ClarityVS1+ColorI:ClarityVS1+ColorE:ClarityVS2+ColorF:ClarityVS2+ColorG:ClarityVS2+ColorH:ClarityVS2+ColorI:ClarityVS2+ColorE:ClarityVVS1+ColorF:ClarityVVS1+ColorG:ClarityVVS1+ColorH:ClarityVVS1+ColorI:ClarityVVS1+ColorE:ClarityVVS2+ColorF:ClarityVVS2+ColorG:ClarityVVS2+ColorH:ClarityVVS2+ColorI:ClarityVVS2+ColorE:PolishG+ColorF:PolishG+ColorG:PolishG+ColorH:PolishG+ColorI:PolishG+ColorE:PolishID+ColorF:PolishID+ColorG:PolishID+ColorH:PolishID+ColorI:PolishID+ColorE:PolishVG+ColorF:PolishVG+ColorG:PolishVG+ColorH:PolishVG+ColorI:PolishVG+ColorE:SymmetryG+ColorF:SymmetryG+ColorG:SymmetryG+ColorH:SymmetryG+ColorI:SymmetryG+ColorE:SymmetryID+ColorF:SymmetryID+ColorG:SymmetryID+ColorH:SymmetryID+ColorI:SymmetryID+ColorE:SymmetryVG+ColorF:SymmetryVG+ColorG:SymmetryVG+ColorH:SymmetryVG+ColorI:SymmetryVG+ColorE:ReportGIA+ColorF:ReportGIA+ColorG:ReportGIA+ColorH:ReportGIA+ColorI:ReportGIA+PolishG:SymmetryG+PolishID:SymmetryG+PolishVG:SymmetryG+PolishG:SymmetryID+PolishID:SymmetryID+PolishVG:SymmetryID+PolishG:SymmetryVG+PolishID:SymmetryVG+PolishVG:SymmetryVG+PolishG:ReportGIA+PolishID:ReportGIA+PolishVG:ReportGIA+SymmetryG:ReportGIA+SymmetryID:ReportGIA+SymmetryVG:ReportGIA
+          + LCarat:Cut + LCarat:Color + LCarat:Calarity + LCarat:Polish + LCarat:Symmetry + LCarat:Report
+          + Caratbelow1:Cut + Caratbelow1:Color + Caratbelow1:Calarity + 
+            Caratbelow1:Polish + Caratbelow1:Symmetry + Caratbelow1:Report"
+```
+
+```{r fit-lm}
+lm <- lm(as.formula(lm_formula), data = diamond.full.smaller.train)
+summary(lm)
+```
+
+```{r eval-lm-model}
+lm.pred.valid <- predict(lm, diamond.full.validation)
+accuracy(exp(lm.pred.valid), diamond.full.validation$Price)
+```
+
+Here we will perform the step-wise backward regression by doing at most 
+10 steps to weed out the variables that are not considered significant. More 
+steps may be needed to find the optimum model. The argument `trace=0` means that 
+the diagnostics of each step are not printed to the screen.
+
+```{r perform-stepwise-regression}
+lm.step <- step(lm, direction = "backward", trace=0, step=10)
+lm.step.pred.valid <- predict(lm.step, diamond.full.validation)
+accuracy(exp(lm.step.pred.valid), diamond.full.validation$Price)
+```
+
+We will now perform the regression on the full training set.
+
+```{r perform-regression-on-full-dataset}
+formula <- "LPrice ~ LCarat+recipCarat+Caratbelow1+Caratequal1+Caratbelow1.5+Caratequal1.5+Caratbelow2+Caratabove2+CutFair+CutGood+CutIdeal+CutSignatureIdeal+CutVeryGood+ColorE+ColorF+ColorG+ColorH+ColorI+ClarityIF+ClaritySI1+ClarityVS1+ClarityVS2+ClarityVVS1+ClarityVVS2+PolishG+PolishID+PolishVG+SymmetryG+SymmetryID+SymmetryVG+ReportGIA+CutGood:ColorE+CutIdeal:ColorE+CutSignatureIdeal:ColorE+CutVeryGood:ColorE+CutGood:ColorF+CutIdeal:ColorF+CutSignatureIdeal:ColorF+CutVeryGood:ColorF+CutGood:ColorG+CutIdeal:ColorG+CutSignatureIdeal:ColorG+CutVeryGood:ColorG+CutGood:ColorH+CutIdeal:ColorH+CutSignatureIdeal:ColorH+CutVeryGood:ColorH+CutGood:ColorI+CutIdeal:ColorI+CutSignatureIdeal:ColorI+CutVeryGood:ColorI+CutGood:ClarityIF+CutIdeal:ClarityIF+CutSignatureIdeal:ClarityIF+CutVeryGood:ClarityIF+CutGood:ClaritySI1+CutIdeal:ClaritySI1+CutSignatureIdeal:ClaritySI1+CutVeryGood:ClaritySI1+CutGood:ClarityVS1+CutIdeal:ClarityVS1+CutSignatureIdeal:ClarityVS1+CutVeryGood:ClarityVS1+CutGood:ClarityVS2+CutIdeal:ClarityVS2+CutSignatureIdeal:ClarityVS2+CutVeryGood:ClarityVS2+CutGood:ClarityVVS1+CutIdeal:ClarityVVS1+CutSignatureIdeal:ClarityVVS1+CutVeryGood:ClarityVVS1+CutGood:ClarityVVS2+CutIdeal:ClarityVVS2+CutSignatureIdeal:ClarityVVS2+CutVeryGood:ClarityVVS2+CutGood:PolishG+CutIdeal:PolishG+CutSignatureIdeal:PolishG+CutVeryGood:PolishG+CutGood:PolishID+CutIdeal:PolishID+CutSignatureIdeal:PolishID+CutVeryGood:PolishID+CutGood:PolishVG+CutIdeal:PolishVG+CutSignatureIdeal:PolishVG+CutVeryGood:PolishVG+CutGood:SymmetryG+CutIdeal:SymmetryG+CutSignatureIdeal:SymmetryG+CutVeryGood:SymmetryG+CutGood:SymmetryID+CutIdeal:SymmetryID+CutSignatureIdeal:SymmetryID+CutVeryGood:SymmetryID+CutGood:SymmetryVG+CutIdeal:SymmetryVG+CutSignatureIdeal:SymmetryVG+CutVeryGood:SymmetryVG+CutGood:ReportGIA+CutIdeal:ReportGIA+CutSignatureIdeal:ReportGIA+CutVeryGood:ReportGIA+ColorE:ClarityIF+ColorF:ClarityIF+ColorG:ClarityIF+ColorH:ClarityIF+ColorI:ClarityIF+ColorE:ClaritySI1+ColorF:ClaritySI1+ColorG:ClaritySI1+ColorH:ClaritySI1+ColorI:ClaritySI1+ColorE:ClarityVS1+ColorF:ClarityVS1+ColorG:ClarityVS1+ColorH:ClarityVS1+ColorI:ClarityVS1+ColorE:ClarityVS2+ColorF:ClarityVS2+ColorG:ClarityVS2+ColorH:ClarityVS2+ColorI:ClarityVS2+ColorE:ClarityVVS1+ColorF:ClarityVVS1+ColorG:ClarityVVS1+ColorH:ClarityVVS1+ColorI:ClarityVVS1+ColorE:ClarityVVS2+ColorF:ClarityVVS2+ColorG:ClarityVVS2+ColorH:ClarityVVS2+ColorI:ClarityVVS2+ColorE:PolishG+ColorF:PolishG+ColorG:PolishG+ColorH:PolishG+ColorI:PolishG+ColorE:PolishID+ColorF:PolishID+ColorG:PolishID+ColorH:PolishID+ColorI:PolishID+ColorE:PolishVG+ColorF:PolishVG+ColorG:PolishVG+ColorH:PolishVG+ColorI:PolishVG+ColorE:SymmetryG+ColorF:SymmetryG+ColorG:SymmetryG+ColorH:SymmetryG+ColorI:SymmetryG+ColorE:SymmetryID+ColorF:SymmetryID+ColorG:SymmetryID+ColorH:SymmetryID+ColorI:SymmetryID+ColorE:SymmetryVG+ColorF:SymmetryVG+ColorG:SymmetryVG+ColorH:SymmetryVG+ColorI:SymmetryVG+ColorE:ReportGIA+ColorF:ReportGIA+ColorG:ReportGIA+ColorH:ReportGIA+ColorI:ReportGIA+PolishG:SymmetryG+PolishID:SymmetryG+PolishVG:SymmetryG+PolishG:SymmetryID+PolishID:SymmetryID+PolishVG:SymmetryID+PolishG:SymmetryVG+PolishID:SymmetryVG+PolishVG:SymmetryVG+PolishG:ReportGIA+PolishID:ReportGIA+PolishVG:ReportGIA+SymmetryG:ReportGIA+SymmetryID:ReportGIA+SymmetryVG:ReportGIA
+          + LCarat:Cut + LCarat:Color + LCarat:Calarity + LCarat:Polish + LCarat:Symmetry + LCarat:Report
++ Caratbelow1:Cut + Caratbelow1:Color + Caratbelow1:Calarity + 
+Caratbelow1:Polish + Caratbelow1:Symmetry + Caratbelow1:Report"
+
+
+lm <- lm(formula, data = diamond.full.train)
+summary(lm)
+lm.pred <- predict(lm, diamond.full.test)
+accuracy(exp(lm.pred), diamond.full.test$Price)
+```
+
+
+```{r perform-stepwise-regression-on-full-dataset}
+lm.step <- step(lm, direction = "backward", trace=0, step=10)
+lm.step.pred <- predict(lm.step, diamond.full.test)
+accuracy(exp(lm.step.pred), diamond.full.test$Price)
+```
+
+
 ## Tree-based models
 
 Here we utilize several tree-based model to predict log price of the diamonds 
@@ -206,7 +269,8 @@ model_formula <- "LPrice ~ LCarat +  recipCarat + Cut + Color + Clarity + Polish
 
 ```{r autofitting-rpart-tree}
 rt.auto.cv <- rpart(model_formula, data = diamond.train, 
-                    control = rpart.control(cp = 0.000001, xval = 10))  # xval is number of folds in the K-fold cross-validation.
+                    control = rpart.control(cp = 0.000001, xval = 10))  
+#xval is number of folds in the K-fold cross-validation.
 #printcp(rt.auto.cv)  # Print out the cp table of cross-validation errors.
 
 #The R-squared for a regression tree is 1 minus rel error. 
@@ -216,7 +280,8 @@ rt.auto.cv <- rpart(model_formula, data = diamond.train,
 #which is the variance in the y's. 
 #xstd measures the variation in xerror between the folds. nsplit is the number of terminal nodes minus 1.
 
-plotcp(rt.auto.cv)  # The horizontal line in this plot is one standard deviation above 
+plotcp(rt.auto.cv)  
+# The horizontal line in this plot is one standard deviation above 
 # the minimum xerror value in the cp table. Because simpler trees are better, 
 # the convention is to choose the cp level to the left of the cp level with the 
 # minimum xerror that is first above the line. 
@@ -297,30 +362,32 @@ prp(rt.simple.tree4, type = 1, extra = 1)
 dev.off()
 ```
 
-### Bagged Tree
+### Bagged Tree/Random Forest
 
 The second tree-based method is a bagged tree, which we implement with the `randomForest()` 
-function and the `mtry` argument set equal to 5 - the number of explanatory 
+function and the `mtry` argument set equal to 14 - the number of explanatory 
 variables feed into the model.
 
 ```{r  bagged-tree-on-train-dataset}
 #bag with smaller train dataset#
 bag.tree <- randomForest(as.formula(model_formula), 
-                         data=diamond.smaller.train, mtry=5, ntree=100,
+                         data=diamond.smaller.train, mtry=14, ntree=100,
                          importance=TRUE)
 bag.tree.pred.valid <- predict(bag.tree, newdata=diamond.validation)
 accuracy(exp(bag.tree.pred.valid), diamond.validation$Price)
 ```
 
-This bagged tree yields a MAPE of 5.57% on the validation set, already a great 
-improvement from the 7.0% of the single tuned tree. Given the improvement of the 
+This bagged tree yields a MAPE of 5.34% on the validation set, already a great 
+improvement from the 6.4% of the single tuned tree. Given the improvement of the 
 bagged tree, we could estimate the bagged tree on the full training set by feeding 
 that dataset to the `randomForest()` function like so:
 
 ```{r bagged-tree-on-full-dataset, eval=FALSE}
 bag.tree <- randomForest(as.formula(model_formula), 
-                         data=diamond.train, mtry=5, ntree=100,
+                         data=diamond.train, mtry=14, ntree=100,
                          importance=TRUE)
+bag.tree.pred <- predict(bag.tree, newdata=diamond.test)
+accuracy(exp(bag.tree.pred), diamond.test$Price)
 ```
 
 ### Random Forest
@@ -396,9 +463,10 @@ to be 5,207.
 ```{r}
 boost <- gbm(as.formula(model_formula), data=diamond.smaller.train,
              distribution = "gaussian",
-             n.trees=100, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
+             n.trees=10000, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
 plot(boost$cv.error)
 best_iteration <- which(boost$cv.error==min(boost$cv.error))
+best_iteration <- 5207
 ```
 
 Using this `n.trees` parameter, we estimate the model on the smaller training set using 
@@ -424,6 +492,7 @@ boost <- gbm(as.formula(model_formula), data=diamond.train,
              distribution = "gaussian",
              n.trees=100, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
 best_iteration <- which(boost$cv.error==min(boost$cv.error))
+best_iteration <- 5207
 boost.cv <- gbm(as.formula(model_formula), data=diamond.train,
                 distribution = "gaussian",
                 n.trees=best_iteration, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
@@ -431,43 +500,6 @@ boost.cv.pred <- predict(boost.cv, newdata=diamond.test, n.trees=best_iteration)
 accuracy(exp(boost.cv.pred), diamond.test$Price)
 ```
 
-## Regression Models
-
-Another class of model we could use is linear regression model. In this section 
-we will use several approaches to calibrate our linear regression model.
-
-### Backward Step-Wise Linear Regression
-
-We start by including all categorical variables & possible interactions in our 
-linear model. This yields a MAPE of 5.34222% on the validation set.
-
-```{r define-lm-formula}
-lm_formula <- "LPrice ~ LCarat+recipCarat+Caratbelow1+Caratequal1+Caratbelow1.5+Caratequal1.5+Caratbelow2+Caratabove2+CutFair+CutGood+CutIdeal+CutSignatureIdeal+CutVeryGood+ColorE+ColorF+ColorG+ColorH+ColorI+ClarityIF+ClaritySI1+ClarityVS1+ClarityVS2+ClarityVVS1+ClarityVVS2+PolishG+PolishID+PolishVG+SymmetryG+SymmetryID+SymmetryVG+ReportGIA+CutGood:ColorE+CutIdeal:ColorE+CutSignatureIdeal:ColorE+CutVeryGood:ColorE+CutGood:ColorF+CutIdeal:ColorF+CutSignatureIdeal:ColorF+CutVeryGood:ColorF+CutGood:ColorG+CutIdeal:ColorG+CutSignatureIdeal:ColorG+CutVeryGood:ColorG+CutGood:ColorH+CutIdeal:ColorH+CutSignatureIdeal:ColorH+CutVeryGood:ColorH+CutGood:ColorI+CutIdeal:ColorI+CutSignatureIdeal:ColorI+CutVeryGood:ColorI+CutGood:ClarityIF+CutIdeal:ClarityIF+CutSignatureIdeal:ClarityIF+CutVeryGood:ClarityIF+CutGood:ClaritySI1+CutIdeal:ClaritySI1+CutSignatureIdeal:ClaritySI1+CutVeryGood:ClaritySI1+CutGood:ClarityVS1+CutIdeal:ClarityVS1+CutSignatureIdeal:ClarityVS1+CutVeryGood:ClarityVS1+CutGood:ClarityVS2+CutIdeal:ClarityVS2+CutSignatureIdeal:ClarityVS2+CutVeryGood:ClarityVS2+CutGood:ClarityVVS1+CutIdeal:ClarityVVS1+CutSignatureIdeal:ClarityVVS1+CutVeryGood:ClarityVVS1+CutGood:ClarityVVS2+CutIdeal:ClarityVVS2+CutSignatureIdeal:ClarityVVS2+CutVeryGood:ClarityVVS2+CutGood:PolishG+CutIdeal:PolishG+CutSignatureIdeal:PolishG+CutVeryGood:PolishG+CutGood:PolishID+CutIdeal:PolishID+CutSignatureIdeal:PolishID+CutVeryGood:PolishID+CutGood:PolishVG+CutIdeal:PolishVG+CutSignatureIdeal:PolishVG+CutVeryGood:PolishVG+CutGood:SymmetryG+CutIdeal:SymmetryG+CutSignatureIdeal:SymmetryG+CutVeryGood:SymmetryG+CutGood:SymmetryID+CutIdeal:SymmetryID+CutSignatureIdeal:SymmetryID+CutVeryGood:SymmetryID+CutGood:SymmetryVG+CutIdeal:SymmetryVG+CutSignatureIdeal:SymmetryVG+CutVeryGood:SymmetryVG+CutGood:ReportGIA+CutIdeal:ReportGIA+CutSignatureIdeal:ReportGIA+CutVeryGood:ReportGIA+ColorE:ClarityIF+ColorF:ClarityIF+ColorG:ClarityIF+ColorH:ClarityIF+ColorI:ClarityIF+ColorE:ClaritySI1+ColorF:ClaritySI1+ColorG:ClaritySI1+ColorH:ClaritySI1+ColorI:ClaritySI1+ColorE:ClarityVS1+ColorF:ClarityVS1+ColorG:ClarityVS1+ColorH:ClarityVS1+ColorI:ClarityVS1+ColorE:ClarityVS2+ColorF:ClarityVS2+ColorG:ClarityVS2+ColorH:ClarityVS2+ColorI:ClarityVS2+ColorE:ClarityVVS1+ColorF:ClarityVVS1+ColorG:ClarityVVS1+ColorH:ClarityVVS1+ColorI:ClarityVVS1+ColorE:ClarityVVS2+ColorF:ClarityVVS2+ColorG:ClarityVVS2+ColorH:ClarityVVS2+ColorI:ClarityVVS2+ColorE:PolishG+ColorF:PolishG+ColorG:PolishG+ColorH:PolishG+ColorI:PolishG+ColorE:PolishID+ColorF:PolishID+ColorG:PolishID+ColorH:PolishID+ColorI:PolishID+ColorE:PolishVG+ColorF:PolishVG+ColorG:PolishVG+ColorH:PolishVG+ColorI:PolishVG+ColorE:SymmetryG+ColorF:SymmetryG+ColorG:SymmetryG+ColorH:SymmetryG+ColorI:SymmetryG+ColorE:SymmetryID+ColorF:SymmetryID+ColorG:SymmetryID+ColorH:SymmetryID+ColorI:SymmetryID+ColorE:SymmetryVG+ColorF:SymmetryVG+ColorG:SymmetryVG+ColorH:SymmetryVG+ColorI:SymmetryVG+ColorE:ReportGIA+ColorF:ReportGIA+ColorG:ReportGIA+ColorH:ReportGIA+ColorI:ReportGIA+PolishG:SymmetryG+PolishID:SymmetryG+PolishVG:SymmetryG+PolishG:SymmetryID+PolishID:SymmetryID+PolishVG:SymmetryID+PolishG:SymmetryVG+PolishID:SymmetryVG+PolishVG:SymmetryVG+PolishG:ReportGIA+PolishID:ReportGIA+PolishVG:ReportGIA+SymmetryG:ReportGIA+SymmetryID:ReportGIA+SymmetryVG:ReportGIA
-          + LCarat:Cut + LCarat:Color + LCarat:Calarity + LCarat:Polish + LCarat:Symmetry + LCarat:Report
-          + Caratbelow1:Cut + Caratbelow1:Color + Caratbelow1:Calarity + 
-            Caratbelow1:Polish + Caratbelow1:Symmetry + Caratbelow1:Report"
-```
-
-```{r fit-lm}
-lm <- lm(as.formula(lm_formula), data = diamond.full.smaller.train)
-summary(lm)
-```
-
-```{r eval-lm-model}
-lm.pred.valid <- predict(lm, diamond.full.validation)
-accuracy(exp(lm.pred.valid), diamond.full.validation$Price)
-```
-
-Here we will perform the step-wise backward regression by doing at most 
-10 steps to weed out the variables that are not considered significant. More 
-steps may be needed to find the optimum model. The argument `trace=0` means that 
-the diagnostics of each step are not printed to the screen.
-
-```{r perform-stepwise-regression}
-lm.step <- step(lm, direction = "backward", trace=0, step=10)
-lm.step.pred <- predict(lm.step, diamond.full.test)
-accuracy(exp(lm.step.pred), diamond.full.test$Price)
-```
 
 ### Lasso Regression
 
@@ -552,7 +584,7 @@ accuracy((exp(bag.tree.pred.valid)), diamond.full.validation$Price)
 accuracy((exp(random.forest.cv.1.pred.valid)), diamond.full.validation$Price)
 accuracy((exp(boost.cv.pred.valid)), diamond.full.validation$Price)
 accuracy((exp(lm.pred.valid)), diamond.full.validation$Price)
-accuracy((exp(lm.step.pred)), diamond.full.validation$Price)
+accuracy((exp(lm.step.pred.valid)), diamond.full.validation$Price)
 accuracy(as.numeric((exp(lm.regularized.pred.valid))), diamond.full.validation$Price)
 ```
 
@@ -560,27 +592,27 @@ accuracy(as.numeric((exp(lm.regularized.pred.valid))), diamond.full.validation$P
 accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid))/2, diamond.full.validation$Price)
 accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid))/2, diamond.full.validation$Price)
 accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid))/2, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(lm.step.pred))/2, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(lm.step.pred.valid))/2, diamond.full.validation$Price)
 accuracy(((exp(bag.tree.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
 ```
 
 ```{r}
 accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid))/2, diamond.full.validation$Price)
 accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid))/2, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.step.pred))/2, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.step.pred.valid))/2, diamond.full.validation$Price)
 accuracy(((exp(random.forest.cv.1.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
 ```
 
 ```{r}
 accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid))/2, diamond.full.validation$Price)
-accuracy(((exp(boost.cv.pred.valid))+exp(lm.step.pred))/2, diamond.full.validation$Price)
+accuracy(((exp(boost.cv.pred.valid))+exp(lm.step.pred.valid))/2, diamond.full.validation$Price)
 accuracy(((exp(boost.cv.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
 ```
 
 ```{r}
-accuracy(((exp(lm.pred.valid))+exp(lm.step.pred))/2, diamond.full.validation$Price)
+accuracy(((exp(lm.pred.valid))+exp(lm.step.pred.valid))/2, diamond.full.validation$Price)
 accuracy(((exp(lm.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
-accuracy(((exp(lm.step.pred))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
+accuracy(((exp(lm.step.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
 ```
 
 ```{r}
@@ -592,77 +624,73 @@ accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+as.numer
 
 ```{r}
 accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid))/3, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred.valid))/3, diamond.full.validation$Price)
 accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
 ```
 
 ```{r}
-accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred.valid))/3, diamond.full.validation$Price)
 accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
 ```
 
 ```{r}
 accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid))/3, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred.valid))/3, diamond.full.validation$Price)
 accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
 ```
 
 ```{r}
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred.valid))/3, diamond.full.validation$Price)
 accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
 ```
 
 ```{r}
-accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
+accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred.valid))/3, diamond.full.validation$Price)
 accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
-accuracy(((exp(boost.cv.pred.valid))+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
-accuracy(((exp(lm.pred.valid))+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
+accuracy(((exp(boost.cv.pred.valid))+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
+accuracy(((exp(lm.pred.valid))+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
 ```
 
-```{r}
-head(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid))/3)
-head((exp(random.forest.cv.1.pred.valid)))
-```
 
 ```{r}
 accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid))/4, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.step.pred))/4, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.step.pred.valid))/4, diamond.full.validation$Price)
 accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
 
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred))/4, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred.valid))/4, diamond.full.validation$Price)
 accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
 ```
 
 ```{r}
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred))/4, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred.valid))/4, diamond.full.validation$Price)
 accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
 ```
 
 ```{r}
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred))/4, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred.valid))/4, diamond.full.validation$Price)
 accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
+accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
 ```
 
 ```{r}
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.step.pred)))/5, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.step.pred.valid)))/5, diamond.full.validation$Price)
 accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
 
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
 ```
 
 ```{r}
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.step.pred))+as.numeric(exp(lm.regularized.pred.valid)))/6, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.step.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/6, diamond.full.validation$Price)
 ```
 
 # Summary of Analysis & Areas for Further Research

@@ -26,6 +26,7 @@ You can load a package by using the `library()` function as shown below, but you
 
 ``` r
 install.packages("gbm")
+install.packages("here")
 ```
 
 After installing all of the packages listed below, then load them up by running this block of code. It is always a good idea to load all the required packages at the beginning of your script so that others can know what packages they need to replicate your analysis.
