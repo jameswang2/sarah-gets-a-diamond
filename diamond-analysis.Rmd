@@ -427,7 +427,7 @@ accuracy(exp(random.forest.cv.1.pred.valid), diamond.validation$Price)
 
 Finally, we can repeat the same procedures above on the full training set.
 
-```{r, eval=FALSE}
+```{r random-forest-eval, eval=FALSE}
 # perform cross validation to tune the model parameters
 trainx <- diamond.train[,c("LCarat", "recipCarat", "Cut", "Color", "Clarity", "Polish", "Symmetry",
                            "Report", "Caratbelow1", "Caratequal1", "Caratbelow1.5","Caratequal1.5", 
@@ -460,10 +460,10 @@ The last tree-based model we will be using is a boosted tree model. We use cross
 validation to identify the best value for the parameter `n.trees`, which turns out 
 to be 5,207.
 
-```{r}
+```{r boosted-tree cv}
 boost <- gbm(as.formula(model_formula), data=diamond.smaller.train,
              distribution = "gaussian",
-             n.trees=10000, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
+             n.trees=100, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
 plot(boost$cv.error)
 best_iteration <- which(boost$cv.error==min(boost$cv.error))
 best_iteration <- 5207
@@ -475,7 +475,7 @@ improvements over the random forest model. It looks like the model is continuall
 better even at the 100th iteration. More iterations might help us find the true 
 optimum number of trees to minimize prediction error.
 
-```{r}
+```{r boosted-tree-accuracy}
 boost.cv <- gbm(as.formula(model_formula), data=diamond.smaller.train,
                 distribution = "gaussian",
                 n.trees=best_iteration, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
@@ -487,7 +487,7 @@ Finally, we repeat the same procedures above using the full dataset, including
 cross validation. Cross validation shows that 100 is the best value for `n.trees`, 
 and using this parameter yields a MAPE of 4.23808% on the test set.
 
-```{r, eval=FALSE}
+```{r boosted-tree-final, eval=FALSE}
 boost <- gbm(as.formula(model_formula), data=diamond.train,
              distribution = "gaussian",
              n.trees=100, interaction.depth=6, cv.folds=10, shrinkage = 0.011)

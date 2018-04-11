@@ -6,13 +6,13 @@ Dang Trinh - April 11, 2018
 -   [Data Wrangling](#data-wrangling)
 -   [Data Visualization](#data-visualization)
 -   [Building Predictive Models](#building-predictive-models)
-    -   [Tree-based models](#tree-based-models)
-        -   [Single Tuned Tree](#single-tuned-tree)
-        -   [Bagged Tree](#bagged-tree)
-        -   [Random Forest](#random-forest)
-        -   [Boosted Trees](#boosted-trees)
     -   [Regression Models](#regression-models)
         -   [Backward Step-Wise Linear Regression](#backward-step-wise-linear-regression)
+    -   [Tree-based models](#tree-based-models)
+        -   [Single Tuned Tree](#single-tuned-tree)
+        -   [Bagged Tree/Random Forest](#bagged-treerandom-forest)
+        -   [Random Forest](#random-forest)
+        -   [Boosted Trees](#boosted-trees)
         -   [Lasso Regression](#lasso-regression)
     -   [Ensemble Forecasts](#ensemble-forecasts)
 -   [Summary of Analysis & Areas for Further Research](#summary-of-analysis-areas-for-further-research)
@@ -240,245 +240,6 @@ plot(x=diamond$LCarat, y=diamond$LPrice,
 
 Building Predictive Models
 ==========================
-
-Tree-based models
------------------
-
-Here we utilize several tree-based model to predict log price of the diamonds based on several characteristics present in the data.
-
-### Single Tuned Tree
-
-Our initial tuned tree (best cp is around 0.00000151859) yields a MAPE of 7.0% when applied to the validation set. The importance variable list shows that log carat size, inverse of carat size, as well as the bins of carat size are all quite significant variables in predicting price.
-
-Note that throughout our modeling analysis we will utilize a common model specification that each process with start with when fitting.
-
-``` r
-model_formula <- "LPrice ~ LCarat +  recipCarat + Cut + Color + Clarity + Polish + Symmetry + 
-                           Report + Caratbelow1 + Caratequal1 + Caratbelow1.5 +
-                           Caratequal1.5 + Caratbelow2 + Caratabove2"
-```
-
-``` r
-rt.auto.cv <- rpart(model_formula, data = diamond.train, 
-                    control = rpart.control(cp = 0.000001, xval = 10))  # xval is number of folds in the K-fold cross-validation.
-#printcp(rt.auto.cv)  # Print out the cp table of cross-validation errors.
-
-#The R-squared for a regression tree is 1 minus rel error. 
-#xerror (or relative cross-validation error where "x" stands for "cross") is a scaled 
-#version of overall average of the 5 out-of-sample MSEs across the 5 folds. 
-#For the scaling, the MSE's are divided by the "root node error" of 0.091868, 
-#which is the variance in the y's. 
-#xstd measures the variation in xerror between the folds. nsplit is the number of terminal nodes minus 1.
-
-plotcp(rt.auto.cv)  # The horizontal line in this plot is one standard deviation above 
-```
-
-![](diamond-analysis_files/figure-markdown_github/autofitting-rpart-tree-1.png)
-
-``` r
-# the minimum xerror value in the cp table. Because simpler trees are better, 
-# the convention is to choose the cp level to the left of the cp level with the 
-# minimum xerror that is first above the line. 
-
-# In this case, the minimum xerror is 0.3972833 at row 35 in the cp table.
-rt.auto.cv.table <- as.data.frame(rt.auto.cv$cptable)
-min(rt.auto.cv.table$xerror)
-```
-
-    ## [1] 0.016786
-
-``` r
-bestcp <- rt.auto.cv.table$CP[rt.auto.cv.table$xerror==min(rt.auto.cv.table$xerror)]
-
-# According to this analysis using 5-fold cross-validation, setting cp = 0.002869198 is best. 
-# Take a look at the resulting 18-terminal-node tree.
-rt.tuned.opt.cv <- rpart(model_formula, data = diamond.train, 
-                         control = rpart.control(cp = bestcp))
-prp(rt.tuned.opt.cv, type = 1, extra = 1)
-```
-
-![](diamond-analysis_files/figure-markdown_github/autofitting-rpart-tree-2.png)
-
-``` r
-importance <- as.data.frame(rt.tuned.opt.cv$variable.importance)
-importance
-```
-
-    ##               rt.tuned.opt.cv$variable.importance
-    ## LCarat                                 2626.73467
-    ## recipCarat                             2626.52726
-    ## Caratabove2                            1455.00293
-    ## Caratbelow2                             777.97927
-    ## Caratbelow1.5                           748.01734
-    ## Caratbelow1                             291.91523
-    ## Clarity                                 220.10135
-    ## Caratequal1.5                           182.81792
-    ## Color                                   158.32919
-    ## Cut                                      24.26178
-    ## Symmetry                                 23.43585
-    ## Polish                                   19.69632
-    ## Report                                    7.32370
-    ## Caratequal1                               1.37345
-
-``` r
-rt.tuned.opt.cv.pred <- predict(rt.tuned.opt.cv, diamond.test)
-accuracy(exp(rt.tuned.opt.cv.pred), diamond.test$Price)
-```
-
-    ##               ME    RMSE     MAE       MPE    MAPE
-    ## Test set 21.0808 1666.28 852.826 -0.124237 6.44278
-
-To facilitate some intuition of the variables, here we generate a few simpler trees than the model above. These trees have much larger cp parameters and as such have much fewer layers, which aids with interpretability.
-
-``` r
-# fitting four simple trees using different complexity parameters
-rt.simple.tree1 <- rpart(model_formula, data = diamond.train, 
-                         control = rpart.control(cp = 0.005))
-rt.simple.tree2 <- rpart(model_formula, data = diamond.train, 
-                         control = rpart.control(cp = 0.001))
-rt.simple.tree3 <- rpart(model_formula, data = diamond.train, 
-                         control = rpart.control(cp = 0.0005))
-rt.simple.tree4 <- rpart(model_formula, data = diamond.train, 
-                         control = rpart.control(cp = 0.0001))
-```
-
-Plots of the trees and diagnostics are available in the `output` folder of this analysis.
-
-### Bagged Tree
-
-The second tree-based method is a bagged tree, which we implement with the `randomForest()` function and the `mtry` argument set equal to 5 - the number of explanatory variables feed into the model.
-
-``` r
-#bag with smaller train dataset#
-bag.tree <- randomForest(as.formula(model_formula), 
-                         data=diamond.smaller.train, mtry=5, ntree=100,
-                         importance=TRUE)
-bag.tree.pred.valid <- predict(bag.tree, newdata=diamond.validation)
-accuracy(exp(bag.tree.pred.valid), diamond.validation$Price)
-```
-
-    ##               ME    RMSE     MAE       MPE    MAPE
-    ## Test set 154.133 1305.73 681.383 -0.274955 5.57991
-
-This bagged tree yields a MAPE of 5.57% on the validation set, already a great improvement from the 7.0% of the single tuned tree. Given the improvement of the bagged tree, we could estimate the bagged tree on the full training set by feeding that dataset to the `randomForest()` function like so:
-
-``` r
-bag.tree <- randomForest(as.formula(model_formula), 
-                         data=diamond.train, mtry=5, ntree=100,
-                         importance=TRUE)
-```
-
-### Random Forest
-
-The third tree-based model we implement is a cross validated random forest, which decorrelates the tree and should provide additional improvements over the bagged tree method.
-
-``` r
-# k-folds cross validation automatically using rfcv
-trainx <- diamond.smaller.train[,c("LCarat", "recipCarat", "Cut", "Color", "Clarity", "Polish", "Symmetry",
-                                  "Report", "Caratbelow1", "Caratequal1", "Caratbelow1.5","Caratequal1.5", 
-                                  "Caratbelow2", "Caratabove2")]
-trainy <- diamond.smaller.train$LPrice
-random.forest.cv <- rfcv(trainx, trainy,
-                         cv.folds = 10, scale="unit", step=-1, ntree=100)
-plot(x=1:14, y=rev(random.forest.cv$error.cv),
-     xlab="mtry parameter", ylab="Cross Validation Error",
-     main="Random Forest Cross Validation Results")
-```
-
-![](diamond-analysis_files/figure-markdown_github/prepare-data-for-rf-cv-training-1.png)
-
-The cross validation results above shows that the best number of `mtry` for random forest should be 9 (vs. 14). We will use this value when estimating our random forest model.
-
-``` r
-random.forest.cv$error.cv[random.forest.cv$error.cv==min(random.forest.cv$error.cv)]
-```
-
-    ##         9 
-    ## 0.0103964
-
-``` r
-random.forest.cv.1 <- randomForest(as.formula(model_formula), 
-                                   data=diamond.smaller.train, mtry=9, ntree=100,
-                                   importance=TRUE)
-random.forest.cv.1.pred.valid <- predict(random.forest.cv.1, newdata=diamond.validation)
-accuracy(exp(random.forest.cv.1.pred.valid), diamond.validation$Price)
-```
-
-    ##               ME    RMSE    MAE       MPE    MAPE
-    ## Test set 76.0959 1149.84 648.61 -0.398527 5.40707
-
-Finally, we can repeat the same procedures above on the full training set.
-
-``` r
-# perform cross validation to tune the model parameters
-trainx <- diamond.train[,c("LCarat", "recipCarat", "Cut", "Color", "Clarity", "Polish", "Symmetry",
-                           "Report", "Caratbelow1", "Caratequal1", "Caratbelow1.5","Caratequal1.5", 
-                           "Caratbelow2", "Caratabove2")]
-trainy <- diamond.train$LPrice
-random.forest.cv <- rfcv(trainx, 
-                         trainy,
-                         cv.folds=10, scale="unit", step=-1, ntree=100)
-
-# determine the best fitting model
-random.forest.cv$error.cv
-length(random.forest.cv$error.cv)
-plot(x=1:14, y=rev(random.forest.cv$error.cv),
-     xlab="mtry parameter", ylab="Cross Validation Error",
-     main="Random Forest Cross Validation Results")
-random.forest.cv$error.cv[random.forest.cv$error.cv==min(random.forest.cv$error.cv)]
-
-# use the optimal parameters to fit the final model
-random.forest.cv.1 <- randomForest(as.formula(model_formula), 
-                                   data=diamond.train, mtry=9, ntree=100,
-                                   importance=TRUE)
-# measure the accuracy
-random.forest.cv.1.pred <- predict(random.forest.cv.1, newdata=diamond.test)
-accuracy(exp(random.forest.cv.1.pred), diamond.test$Price)
-```
-
-### Boosted Trees
-
-The last tree-based model we will be using is a boosted tree model. We use cross validation to identify the best value for the parameter `n.trees`, which turns out to be 5,207.
-
-``` r
-boost <- gbm(as.formula(model_formula), data=diamond.smaller.train,
-             distribution = "gaussian",
-             n.trees=100, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
-plot(boost$cv.error)
-```
-
-![](diamond-analysis_files/figure-markdown_github/unnamed-chunk-4-1.png)
-
-``` r
-best_iteration <- which(boost$cv.error==min(boost$cv.error))
-```
-
-Using this `n.trees` parameter, we estimate the model on the smaller training set using 100 iterations, which yields a MAPE of 4.46% on the validation set, representing additional improvements over the random forest model. It looks like the model is continually getting better even at the 100th iteration. More iterations might help us find the true optimum number of trees to minimize prediction error.
-
-``` r
-boost.cv <- gbm(as.formula(model_formula), data=diamond.smaller.train,
-                distribution = "gaussian",
-                n.trees=best_iteration, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
-boost.cv.pred.valid <- predict(boost.cv, newdata=diamond.validation, n.trees=best_iteration)
-accuracy(exp(boost.cv.pred.valid), diamond.validation$Price)
-```
-
-    ##               ME    RMSE     MAE      MPE    MAPE
-    ## Test set 1738.55 5741.28 3028.09 -4.25467 23.4299
-
-Finally, we repeat the same procedures above using the full dataset, including cross validation. Cross validation shows that 100 is the best value for `n.trees`, and using this parameter yields a MAPE of 4.23808% on the test set.
-
-``` r
-boost <- gbm(as.formula(model_formula), data=diamond.train,
-             distribution = "gaussian",
-             n.trees=100, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
-best_iteration <- which(boost$cv.error==min(boost$cv.error))
-boost.cv <- gbm(as.formula(model_formula), data=diamond.train,
-                distribution = "gaussian",
-                n.trees=best_iteration, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
-boost.cv.pred <- predict(boost.cv, newdata=diamond.test, n.trees=best_iteration)
-accuracy(exp(boost.cv.pred), diamond.test$Price)
-```
 
 Regression Models
 -----------------
@@ -899,12 +660,488 @@ Here we will perform the step-wise backward regression by doing at most 10 steps
 
 ``` r
 lm.step <- step(lm, direction = "backward", trace=0, step=10)
+lm.step.pred.valid <- predict(lm.step, diamond.full.validation)
+accuracy(exp(lm.step.pred.valid), diamond.full.validation$Price)
+```
+
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 40.44794 1148.506 661.4527 -0.5542636 5.512112
+
+We will now perform the regression on the full training set.
+
+``` r
+formula <- "LPrice ~ LCarat+recipCarat+Caratbelow1+Caratequal1+Caratbelow1.5+Caratequal1.5+Caratbelow2+Caratabove2+CutFair+CutGood+CutIdeal+CutSignatureIdeal+CutVeryGood+ColorE+ColorF+ColorG+ColorH+ColorI+ClarityIF+ClaritySI1+ClarityVS1+ClarityVS2+ClarityVVS1+ClarityVVS2+PolishG+PolishID+PolishVG+SymmetryG+SymmetryID+SymmetryVG+ReportGIA+CutGood:ColorE+CutIdeal:ColorE+CutSignatureIdeal:ColorE+CutVeryGood:ColorE+CutGood:ColorF+CutIdeal:ColorF+CutSignatureIdeal:ColorF+CutVeryGood:ColorF+CutGood:ColorG+CutIdeal:ColorG+CutSignatureIdeal:ColorG+CutVeryGood:ColorG+CutGood:ColorH+CutIdeal:ColorH+CutSignatureIdeal:ColorH+CutVeryGood:ColorH+CutGood:ColorI+CutIdeal:ColorI+CutSignatureIdeal:ColorI+CutVeryGood:ColorI+CutGood:ClarityIF+CutIdeal:ClarityIF+CutSignatureIdeal:ClarityIF+CutVeryGood:ClarityIF+CutGood:ClaritySI1+CutIdeal:ClaritySI1+CutSignatureIdeal:ClaritySI1+CutVeryGood:ClaritySI1+CutGood:ClarityVS1+CutIdeal:ClarityVS1+CutSignatureIdeal:ClarityVS1+CutVeryGood:ClarityVS1+CutGood:ClarityVS2+CutIdeal:ClarityVS2+CutSignatureIdeal:ClarityVS2+CutVeryGood:ClarityVS2+CutGood:ClarityVVS1+CutIdeal:ClarityVVS1+CutSignatureIdeal:ClarityVVS1+CutVeryGood:ClarityVVS1+CutGood:ClarityVVS2+CutIdeal:ClarityVVS2+CutSignatureIdeal:ClarityVVS2+CutVeryGood:ClarityVVS2+CutGood:PolishG+CutIdeal:PolishG+CutSignatureIdeal:PolishG+CutVeryGood:PolishG+CutGood:PolishID+CutIdeal:PolishID+CutSignatureIdeal:PolishID+CutVeryGood:PolishID+CutGood:PolishVG+CutIdeal:PolishVG+CutSignatureIdeal:PolishVG+CutVeryGood:PolishVG+CutGood:SymmetryG+CutIdeal:SymmetryG+CutSignatureIdeal:SymmetryG+CutVeryGood:SymmetryG+CutGood:SymmetryID+CutIdeal:SymmetryID+CutSignatureIdeal:SymmetryID+CutVeryGood:SymmetryID+CutGood:SymmetryVG+CutIdeal:SymmetryVG+CutSignatureIdeal:SymmetryVG+CutVeryGood:SymmetryVG+CutGood:ReportGIA+CutIdeal:ReportGIA+CutSignatureIdeal:ReportGIA+CutVeryGood:ReportGIA+ColorE:ClarityIF+ColorF:ClarityIF+ColorG:ClarityIF+ColorH:ClarityIF+ColorI:ClarityIF+ColorE:ClaritySI1+ColorF:ClaritySI1+ColorG:ClaritySI1+ColorH:ClaritySI1+ColorI:ClaritySI1+ColorE:ClarityVS1+ColorF:ClarityVS1+ColorG:ClarityVS1+ColorH:ClarityVS1+ColorI:ClarityVS1+ColorE:ClarityVS2+ColorF:ClarityVS2+ColorG:ClarityVS2+ColorH:ClarityVS2+ColorI:ClarityVS2+ColorE:ClarityVVS1+ColorF:ClarityVVS1+ColorG:ClarityVVS1+ColorH:ClarityVVS1+ColorI:ClarityVVS1+ColorE:ClarityVVS2+ColorF:ClarityVVS2+ColorG:ClarityVVS2+ColorH:ClarityVVS2+ColorI:ClarityVVS2+ColorE:PolishG+ColorF:PolishG+ColorG:PolishG+ColorH:PolishG+ColorI:PolishG+ColorE:PolishID+ColorF:PolishID+ColorG:PolishID+ColorH:PolishID+ColorI:PolishID+ColorE:PolishVG+ColorF:PolishVG+ColorG:PolishVG+ColorH:PolishVG+ColorI:PolishVG+ColorE:SymmetryG+ColorF:SymmetryG+ColorG:SymmetryG+ColorH:SymmetryG+ColorI:SymmetryG+ColorE:SymmetryID+ColorF:SymmetryID+ColorG:SymmetryID+ColorH:SymmetryID+ColorI:SymmetryID+ColorE:SymmetryVG+ColorF:SymmetryVG+ColorG:SymmetryVG+ColorH:SymmetryVG+ColorI:SymmetryVG+ColorE:ReportGIA+ColorF:ReportGIA+ColorG:ReportGIA+ColorH:ReportGIA+ColorI:ReportGIA+PolishG:SymmetryG+PolishID:SymmetryG+PolishVG:SymmetryG+PolishG:SymmetryID+PolishID:SymmetryID+PolishVG:SymmetryID+PolishG:SymmetryVG+PolishID:SymmetryVG+PolishVG:SymmetryVG+PolishG:ReportGIA+PolishID:ReportGIA+PolishVG:ReportGIA+SymmetryG:ReportGIA+SymmetryID:ReportGIA+SymmetryVG:ReportGIA
+          + LCarat:Cut + LCarat:Color + LCarat:Calarity + LCarat:Polish + LCarat:Symmetry + LCarat:Report
++ Caratbelow1:Cut + Caratbelow1:Color + Caratbelow1:Calarity + 
+Caratbelow1:Polish + Caratbelow1:Symmetry + Caratbelow1:Report"
+
+
+lm <- lm(formula, data = diamond.full.train)
+summary(lm)
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = formula, data = diamond.full.train)
+    ## 
+    ## Residuals:
+    ##      Min       1Q   Median       3Q      Max 
+    ## -0.75294 -0.04332 -0.00037  0.04128  0.42819 
+    ## 
+    ## Coefficients: (25 not defined because of singularities)
+    ##                                 Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept)                   10.8857669  0.0881621 123.474  < 2e-16 ***
+    ## LCarat                         0.8411953  0.0434586  19.356  < 2e-16 ***
+    ## recipCarat                    -1.0164058  0.0500397 -20.312  < 2e-16 ***
+    ## Caratbelow1                   -0.3498842  0.0117198 -29.854  < 2e-16 ***
+    ## Caratequal1                   -0.2629432  0.0113945 -23.076  < 2e-16 ***
+    ## Caratbelow1.5                 -0.3022285  0.0099066 -30.508  < 2e-16 ***
+    ## Caratequal1.5                 -0.2200981  0.0089504 -24.591  < 2e-16 ***
+    ## Caratbelow2                   -0.2220632  0.0065940 -33.676  < 2e-16 ***
+    ## Caratabove2                           NA         NA      NA       NA    
+    ## CutFair                       -0.0356195  0.0443243  -0.804 0.421655    
+    ## CutGood                       -0.0520513  0.0237103  -2.195 0.028181 *  
+    ## CutIdeal                       0.0154857  0.0774769   0.200 0.841586    
+    ## CutSignatureIdeal              0.2023201  0.0341848   5.918 3.43e-09 ***
+    ## CutVeryGood                           NA         NA      NA       NA    
+    ## ColorE                        -0.0325150  0.0530134  -0.613 0.539678    
+    ## ColorF                        -0.1539324  0.0488881  -3.149 0.001648 ** 
+    ## ColorG                        -0.3204833  0.0501157  -6.395 1.73e-10 ***
+    ## ColorH                        -0.5015245  0.0491699 -10.200  < 2e-16 ***
+    ## ColorI                        -0.5945498  0.0518050 -11.477  < 2e-16 ***
+    ## ClarityIF                      0.0048389  0.0830966   0.058 0.953565    
+    ## ClaritySI1                    -0.9776400  0.0616623 -15.855  < 2e-16 ***
+    ## ClarityVS1                    -0.7176252  0.0634776 -11.305  < 2e-16 ***
+    ## ClarityVS2                    -0.8327150  0.0621246 -13.404  < 2e-16 ***
+    ## ClarityVVS1                   -0.3443668  0.0967819  -3.558 0.000376 ***
+    ## ClarityVVS2                   -0.4466233  0.0549761  -8.124 5.46e-16 ***
+    ## PolishG                       -0.0651099  0.0397003  -1.640 0.101052    
+    ## PolishID                       0.1062700  0.0592420   1.794 0.072892 .  
+    ## PolishVG                      -0.0350036  0.0254245  -1.377 0.168636    
+    ## SymmetryG                     -0.0754902  0.0338489  -2.230 0.025771 *  
+    ## SymmetryID                    -0.0115648  0.0592404  -0.195 0.845229    
+    ## SymmetryVG                    -0.0545907  0.0298064  -1.832 0.067075 .  
+    ## ReportGIA                      0.0783117  0.0463347   1.690 0.091056 .  
+    ## CutGood:ColorE                 0.0027200  0.0272090   0.100 0.920375    
+    ## CutIdeal:ColorE                0.0008022  0.0265122   0.030 0.975863    
+    ## CutSignatureIdeal:ColorE      -0.0255896  0.0344844  -0.742 0.458079    
+    ## CutVeryGood:ColorE             0.0049397  0.0258553   0.191 0.848492    
+    ## CutGood:ColorF                -0.0183369  0.0285533  -0.642 0.520770    
+    ## CutIdeal:ColorF               -0.0094570  0.0279715  -0.338 0.735303    
+    ## CutSignatureIdeal:ColorF      -0.0471739  0.0348136  -1.355 0.175456    
+    ## CutVeryGood:ColorF            -0.0081051  0.0272813  -0.297 0.766405    
+    ## CutGood:ColorG                 0.0304481  0.0297336   1.024 0.305863    
+    ## CutIdeal:ColorG                0.0131030  0.0291622   0.449 0.653220    
+    ## CutSignatureIdeal:ColorG      -0.0174746  0.0350065  -0.499 0.617670    
+    ## CutVeryGood:ColorG             0.0247805  0.0286015   0.866 0.386305    
+    ## CutGood:ColorH                 0.0280249  0.0288146   0.973 0.330795    
+    ## CutIdeal:ColorH                0.0172214  0.0281344   0.612 0.540487    
+    ## CutSignatureIdeal:ColorH      -0.0090151  0.0348627  -0.259 0.795962    
+    ## CutVeryGood:ColorH             0.0294948  0.0275418   1.071 0.284255    
+    ## CutGood:ColorI                -0.0345030  0.0313305  -1.101 0.270830    
+    ## CutIdeal:ColorI               -0.0658519  0.0308265  -2.136 0.032704 *  
+    ## CutSignatureIdeal:ColorI      -0.0783534  0.0370452  -2.115 0.034466 *  
+    ## CutVeryGood:ColorI            -0.0452575  0.0301711  -1.500 0.133661    
+    ## CutGood:ClarityIF             -0.0221305  0.0652305  -0.339 0.734421    
+    ## CutIdeal:ClarityIF             0.0020431  0.0966071   0.021 0.983128    
+    ## CutSignatureIdeal:ClarityIF   -0.0898913  0.0687890  -1.307 0.191343    
+    ## CutVeryGood:ClarityIF         -0.0457992  0.0623562  -0.734 0.462687    
+    ## CutGood:ClaritySI1             0.0163125  0.0309851   0.526 0.598586    
+    ## CutIdeal:ClaritySI1            0.0172088  0.0794706   0.217 0.828572    
+    ## CutSignatureIdeal:ClaritySI1  -0.0016432  0.0324406  -0.051 0.959604    
+    ## CutVeryGood:ClaritySI1        -0.0152513  0.0290058  -0.526 0.599046    
+    ## CutGood:ClarityVS1             0.0631323  0.0348252   1.813 0.069909 .  
+    ## CutIdeal:ClarityVS1            0.0910751  0.0808574   1.126 0.260056    
+    ## CutSignatureIdeal:ClarityVS1   0.0389351  0.0352871   1.103 0.269906    
+    ## CutVeryGood:ClarityVS1         0.0508347  0.0326680   1.556 0.119738    
+    ## CutGood:ClarityVS2             0.0382766  0.0320417   1.195 0.232297    
+    ## CutIdeal:ClarityVS2            0.0606787  0.0798011   0.760 0.447062    
+    ## CutSignatureIdeal:ClarityVS2   0.0220058  0.0333829   0.659 0.509798    
+    ## CutVeryGood:ClarityVS2         0.0201684  0.0299982   0.672 0.501408    
+    ## CutGood:ClarityVVS1            0.0204895  0.0833308   0.246 0.805783    
+    ## CutIdeal:ClarityVVS1           0.0813694  0.1081432   0.752 0.451827    
+    ## CutSignatureIdeal:ClarityVVS1  0.0381010  0.0812481   0.469 0.639126    
+    ## CutVeryGood:ClarityVVS1        0.0643305  0.0791771   0.812 0.416545    
+    ## CutGood:ClarityVVS2                   NA         NA      NA       NA    
+    ## CutIdeal:ClarityVVS2           0.0440963  0.0741990   0.594 0.552336    
+    ## CutSignatureIdeal:ClarityVVS2         NA         NA      NA       NA    
+    ## CutVeryGood:ClarityVVS2               NA         NA      NA       NA    
+    ## CutGood:PolishG                0.0503255  0.0245587   2.049 0.040488 *  
+    ## CutIdeal:PolishG               0.0094481  0.0262068   0.361 0.718472    
+    ## CutSignatureIdeal:PolishG             NA         NA      NA       NA    
+    ## CutVeryGood:PolishG            0.0229965  0.0237136   0.970 0.332205    
+    ## CutGood:PolishID                      NA         NA      NA       NA    
+    ## CutIdeal:PolishID              0.0589223  0.0628614   0.937 0.348624    
+    ## CutSignatureIdeal:PolishID     0.0056629  0.0309285   0.183 0.854729    
+    ## CutVeryGood:PolishID                  NA         NA      NA       NA    
+    ## CutGood:PolishVG               0.0166423  0.0198450   0.839 0.401719    
+    ## CutIdeal:PolishVG              0.0009330  0.0193670   0.048 0.961577    
+    ## CutSignatureIdeal:PolishVG            NA         NA      NA       NA    
+    ## CutVeryGood:PolishVG           0.0113083  0.0191188   0.591 0.554223    
+    ## CutGood:SymmetryG              0.0037363  0.0269953   0.138 0.889926    
+    ## CutIdeal:SymmetryG             0.0248965  0.0270551   0.920 0.357499    
+    ## CutSignatureIdeal:SymmetryG           NA         NA      NA       NA    
+    ## CutVeryGood:SymmetryG          0.0140799  0.0253589   0.555 0.578761    
+    ## CutGood:SymmetryID            -0.0157786  0.0815211  -0.194 0.846534    
+    ## CutIdeal:SymmetryID           -0.0651399  0.0648530  -1.004 0.315216    
+    ## CutSignatureIdeal:SymmetryID          NA         NA      NA       NA    
+    ## CutVeryGood:SymmetryID                NA         NA      NA       NA    
+    ## CutGood:SymmetryVG             0.0005952  0.0267573   0.022 0.982255    
+    ## CutIdeal:SymmetryVG            0.0078725  0.0252696   0.312 0.755402    
+    ## CutSignatureIdeal:SymmetryVG          NA         NA      NA       NA    
+    ## CutVeryGood:SymmetryVG         0.0179430  0.0252305   0.711 0.477012    
+    ## CutGood:ReportGIA              0.0004958  0.0275888   0.018 0.985662    
+    ## CutIdeal:ReportGIA             0.0035025  0.0311725   0.112 0.910544    
+    ## CutSignatureIdeal:ReportGIA           NA         NA      NA       NA    
+    ## CutVeryGood:ReportGIA          0.0040532  0.0258882   0.157 0.875593    
+    ## ColorE:ClarityIF              -0.1694396  0.0235248  -7.203 6.65e-13 ***
+    ## ColorF:ClarityIF              -0.2033339  0.0190663 -10.665  < 2e-16 ***
+    ## ColorG:ClarityIF              -0.3079083  0.0166317 -18.513  < 2e-16 ***
+    ## ColorH:ClarityIF              -0.3124721  0.0209664 -14.904  < 2e-16 ***
+    ## ColorI:ClarityIF              -0.3500132  0.0223810 -15.639  < 2e-16 ***
+    ## ColorE:ClaritySI1              0.0599987  0.0128979   4.652 3.36e-06 ***
+    ## ColorF:ClaritySI1              0.0910804  0.0122141   7.457 1.01e-13 ***
+    ## ColorG:ClaritySI1              0.1729081  0.0114902  15.048  < 2e-16 ***
+    ## ColorH:ClaritySI1              0.3263847  0.0126096  25.884  < 2e-16 ***
+    ## ColorI:ClaritySI1              0.3544162  0.0136537  25.958  < 2e-16 ***
+    ## ColorE:ClarityVS1              0.0453761  0.0149639   3.032 0.002437 ** 
+    ## ColorF:ClarityVS1              0.0789217  0.0138676   5.691 1.32e-08 ***
+    ## ColorG:ClarityVS1              0.1208277  0.0126494   9.552  < 2e-16 ***
+    ## ColorH:ClarityVS1              0.1622460  0.0140889  11.516  < 2e-16 ***
+    ## ColorI:ClarityVS1              0.1520032  0.0150237  10.118  < 2e-16 ***
+    ## ColorE:ClarityVS2              0.0819840  0.0138688   5.911 3.58e-09 ***
+    ## ColorF:ClarityVS2              0.1231261  0.0129482   9.509  < 2e-16 ***
+    ## ColorG:ClarityVS2              0.1954206  0.0119339  16.375  < 2e-16 ***
+    ## ColorH:ClarityVS2              0.2490765  0.0133847  18.609  < 2e-16 ***
+    ## ColorI:ClarityVS2              0.2416156  0.0142978  16.899  < 2e-16 ***
+    ## ColorE:ClarityVVS1            -0.0128802  0.0223198  -0.577 0.563912    
+    ## ColorF:ClarityVVS1            -0.0575130  0.0202213  -2.844 0.004468 ** 
+    ## ColorG:ClarityVVS1            -0.0983140  0.0189195  -5.196 2.10e-07 ***
+    ## ColorH:ClarityVVS1            -0.0931286  0.0211952  -4.394 1.13e-05 ***
+    ## ColorI:ClarityVVS1            -0.0895725  0.0233886  -3.830 0.000130 ***
+    ## ColorE:ClarityVVS2                    NA         NA      NA       NA    
+    ## ColorF:ClarityVVS2                    NA         NA      NA       NA    
+    ## ColorG:ClarityVVS2                    NA         NA      NA       NA    
+    ## ColorH:ClarityVVS2                    NA         NA      NA       NA    
+    ## ColorI:ClarityVVS2                    NA         NA      NA       NA    
+    ## ColorE:PolishG                -0.0153979  0.0152779  -1.008 0.313565    
+    ## ColorF:PolishG                -0.0252057  0.0145185  -1.736 0.082597 .  
+    ## ColorG:PolishG                -0.0017981  0.0141086  -0.127 0.898592    
+    ## ColorH:PolishG                 0.0053534  0.0149239   0.359 0.719821    
+    ## ColorI:PolishG                 0.0069415  0.0150175   0.462 0.643936    
+    ## ColorE:PolishID               -0.1821826  0.1087685  -1.675 0.093996 .  
+    ## ColorF:PolishID               -0.0853109  0.0639314  -1.334 0.182121    
+    ## ColorG:PolishID               -0.1044873  0.0638984  -1.635 0.102059    
+    ## ColorH:PolishID               -0.0885673  0.0617982  -1.433 0.151863    
+    ## ColorI:PolishID               -0.0900187  0.0692037  -1.301 0.193385    
+    ## ColorE:PolishVG               -0.0009669  0.0095537  -0.101 0.919390    
+    ## ColorF:PolishVG               -0.0132251  0.0090054  -1.469 0.142002    
+    ## ColorG:PolishVG                0.0017243  0.0084322   0.204 0.837980    
+    ## ColorH:PolishVG               -0.0027216  0.0089713  -0.303 0.761618    
+    ## ColorI:PolishVG                0.0016703  0.0094480   0.177 0.859677    
+    ## ColorE:SymmetryG              -0.0069342  0.0137792  -0.503 0.614817    
+    ## ColorF:SymmetryG               0.0045517  0.0134013   0.340 0.734138    
+    ## ColorG:SymmetryG               0.0031296  0.0127727   0.245 0.806449    
+    ## ColorH:SymmetryG               0.0142903  0.0133548   1.070 0.284642    
+    ## ColorI:SymmetryG               0.0086615  0.0140463   0.617 0.537497    
+    ## ColorE:SymmetryID              0.0876309  0.1117377   0.784 0.432922    
+    ## ColorF:SymmetryID              0.0525656  0.0642818   0.818 0.413541    
+    ## ColorG:SymmetryID              0.0541963  0.0642913   0.843 0.399275    
+    ## ColorH:SymmetryID              0.0157902  0.0636482   0.248 0.804076    
+    ## ColorI:SymmetryID              0.0440599  0.0698823   0.630 0.528400    
+    ## ColorE:SymmetryVG             -0.0013358  0.0100982  -0.132 0.894768    
+    ## ColorF:SymmetryVG              0.0137304  0.0095470   1.438 0.150433    
+    ## ColorG:SymmetryVG              0.0079407  0.0089178   0.890 0.373271    
+    ## ColorH:SymmetryVG              0.0183679  0.0094493   1.944 0.051962 .  
+    ## ColorI:SymmetryVG              0.0081760  0.0100294   0.815 0.414986    
+    ## ColorE:ReportGIA              -0.0805410  0.0480703  -1.675 0.093893 .  
+    ## ColorF:ReportGIA              -0.0170635  0.0428946  -0.398 0.690792    
+    ## ColorG:ReportGIA              -0.0306871  0.0430828  -0.712 0.476318    
+    ## ColorH:ReportGIA              -0.0686785  0.0436122  -1.575 0.115368    
+    ## ColorI:ReportGIA              -0.0461353  0.0427344  -1.080 0.280373    
+    ## PolishG:SymmetryG              0.0336732  0.0162825   2.068 0.038678 *  
+    ## PolishID:SymmetryG                    NA         NA      NA       NA    
+    ## PolishVG:SymmetryG             0.0194432  0.0096454   2.016 0.043867 *  
+    ## PolishG:SymmetryID                    NA         NA      NA       NA    
+    ## PolishID:SymmetryID           -0.0205458  0.0386648  -0.531 0.595173    
+    ## PolishVG:SymmetryID                   NA         NA      NA       NA    
+    ## PolishG:SymmetryVG             0.0275811  0.0145577   1.895 0.058194 .  
+    ## PolishID:SymmetryVG                   NA         NA      NA       NA    
+    ## PolishVG:SymmetryVG            0.0255225  0.0053690   4.754 2.05e-06 ***
+    ## PolishG:ReportGIA             -0.0091702  0.0286668  -0.320 0.749065    
+    ## PolishID:ReportGIA                    NA         NA      NA       NA    
+    ## PolishVG:ReportGIA            -0.0056570  0.0175056  -0.323 0.746592    
+    ## SymmetryG:ReportGIA            0.0190722  0.0224795   0.848 0.396234    
+    ## SymmetryID:ReportGIA                  NA         NA      NA       NA    
+    ## SymmetryVG:ReportGIA           0.0018631  0.0177234   0.105 0.916282    
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 0.07102 on 5841 degrees of freedom
+    ## Multiple R-squared:  0.9903, Adjusted R-squared:   0.99 
+    ## F-statistic:  3762 on 158 and 5841 DF,  p-value: < 2.2e-16
+
+``` r
+lm.pred <- predict(lm, diamond.full.test)
+accuracy(exp(lm.pred), diamond.full.test$Price)
+```
+
+    ##                ME     RMSE      MAE         MPE     MAPE
+    ## Test set 95.15284 1231.742 668.8626 -0.03850604 5.348386
+
+``` r
+lm.step <- step(lm, direction = "backward", trace=0, step=10)
 lm.step.pred <- predict(lm.step, diamond.full.test)
 accuracy(exp(lm.step.pred), diamond.full.test$Price)
 ```
 
-    ##                ME     RMSE      MAE        MPE     MAPE
-    ## Test set 86.65465 1223.329 668.9127 -0.1223765 5.367779
+    ##                ME     RMSE      MAE         MPE     MAPE
+    ## Test set 95.15284 1231.742 668.8626 -0.03850604 5.348386
+
+Tree-based models
+-----------------
+
+Here we utilize several tree-based model to predict log price of the diamonds based on several characteristics present in the data.
+
+### Single Tuned Tree
+
+Our initial tuned tree (best cp is around 0.00000151859) yields a MAPE of 7.0% when applied to the validation set. The importance variable list shows that log carat size, inverse of carat size, as well as the bins of carat size are all quite significant variables in predicting price.
+
+Note that throughout our modeling analysis we will utilize a common model specification that each process with start with when fitting.
+
+``` r
+model_formula <- "LPrice ~ LCarat +  recipCarat + Cut + Color + Clarity + Polish + Symmetry + 
+                           Report + Caratbelow1 + Caratequal1 + Caratbelow1.5 +
+                           Caratequal1.5 + Caratbelow2 + Caratabove2"
+```
+
+``` r
+rt.auto.cv <- rpart(model_formula, data = diamond.train, 
+                    control = rpart.control(cp = 0.000001, xval = 10))  
+#xval is number of folds in the K-fold cross-validation.
+#printcp(rt.auto.cv)  # Print out the cp table of cross-validation errors.
+
+#The R-squared for a regression tree is 1 minus rel error. 
+#xerror (or relative cross-validation error where "x" stands for "cross") is a scaled 
+#version of overall average of the 5 out-of-sample MSEs across the 5 folds. 
+#For the scaling, the MSE's are divided by the "root node error" of 0.091868, 
+#which is the variance in the y's. 
+#xstd measures the variation in xerror between the folds. nsplit is the number of terminal nodes minus 1.
+
+plotcp(rt.auto.cv)  
+```
+
+![](diamond-analysis_files/figure-markdown_github/autofitting-rpart-tree-1.png)
+
+``` r
+# The horizontal line in this plot is one standard deviation above 
+# the minimum xerror value in the cp table. Because simpler trees are better, 
+# the convention is to choose the cp level to the left of the cp level with the 
+# minimum xerror that is first above the line. 
+
+# In this case, the minimum xerror is 0.3972833 at row 35 in the cp table.
+rt.auto.cv.table <- as.data.frame(rt.auto.cv$cptable)
+min(rt.auto.cv.table$xerror)
+```
+
+    ## [1] 0.01678595
+
+``` r
+bestcp <- rt.auto.cv.table$CP[rt.auto.cv.table$xerror==min(rt.auto.cv.table$xerror)]
+
+# According to this analysis using 5-fold cross-validation, setting cp = 0.002869198 is best. 
+# Take a look at the resulting 18-terminal-node tree.
+rt.tuned.opt.cv <- rpart(model_formula, data = diamond.train, 
+                         control = rpart.control(cp = bestcp))
+prp(rt.tuned.opt.cv, type = 1, extra = 1)
+```
+
+![](diamond-analysis_files/figure-markdown_github/autofitting-rpart-tree-2.png)
+
+``` r
+importance <- as.data.frame(rt.tuned.opt.cv$variable.importance)
+importance
+```
+
+    ##               rt.tuned.opt.cv$variable.importance
+    ## LCarat                                2626.734670
+    ## recipCarat                            2626.527258
+    ## Caratabove2                           1455.002927
+    ## Caratbelow2                            777.979267
+    ## Caratbelow1.5                          748.017341
+    ## Caratbelow1                            291.915230
+    ## Clarity                                220.101351
+    ## Caratequal1.5                          182.817922
+    ## Color                                  158.329191
+    ## Cut                                     24.261775
+    ## Symmetry                                23.435850
+    ## Polish                                  19.696325
+    ## Report                                   7.323699
+    ## Caratequal1                              1.373455
+
+``` r
+rt.tuned.opt.cv.pred <- predict(rt.tuned.opt.cv, diamond.test)
+accuracy(exp(rt.tuned.opt.cv.pred), diamond.test$Price)
+```
+
+    ##               ME    RMSE     MAE       MPE    MAPE
+    ## Test set 21.0808 1666.28 852.826 -0.124237 6.44278
+
+To facilitate some intuition of the variables, here we generate a few simpler trees than the model above. These trees have much larger cp parameters and as such have much fewer layers, which aids with interpretability.
+
+``` r
+# fitting four simple trees using different complexity parameters
+rt.simple.tree1 <- rpart(model_formula, data = diamond.train, 
+                         control = rpart.control(cp = 0.005))
+rt.simple.tree2 <- rpart(model_formula, data = diamond.train, 
+                         control = rpart.control(cp = 0.001))
+rt.simple.tree3 <- rpart(model_formula, data = diamond.train, 
+                         control = rpart.control(cp = 0.0005))
+rt.simple.tree4 <- rpart(model_formula, data = diamond.train, 
+                         control = rpart.control(cp = 0.0001))
+```
+
+Plots of the trees and diagnostics are available in the `output` folder of this analysis.
+
+### Bagged Tree/Random Forest
+
+The second tree-based method is a bagged tree, which we implement with the `randomForest()` function and the `mtry` argument set equal to 14 - the number of explanatory variables feed into the model.
+
+``` r
+#bag with smaller train dataset#
+bag.tree <- randomForest(as.formula(model_formula), 
+                         data=diamond.smaller.train, mtry=14, ntree=100,
+                         importance=TRUE)
+bag.tree.pred.valid <- predict(bag.tree, newdata=diamond.validation)
+accuracy(exp(bag.tree.pred.valid), diamond.validation$Price)
+```
+
+    ##                ME    RMSE      MAE        MPE     MAPE
+    ## Test set 54.93479 1145.96 651.0374 -0.3755985 5.467027
+
+This bagged tree yields a MAPE of 5.34% on the validation set, already a great improvement from the 6.4% of the single tuned tree. Given the improvement of the bagged tree, we could estimate the bagged tree on the full training set by feeding that dataset to the `randomForest()` function like so:
+
+``` r
+bag.tree <- randomForest(as.formula(model_formula), 
+                         data=diamond.train, mtry=14, ntree=100,
+                         importance=TRUE)
+bag.tree.pred <- predict(bag.tree, newdata=diamond.test)
+accuracy(exp(bag.tree.pred), diamond.test$Price)
+```
+
+### Random Forest
+
+The third tree-based model we implement is a cross validated random forest, which decorrelates the tree and should provide additional improvements over the bagged tree method.
+
+``` r
+# k-folds cross validation automatically using rfcv
+trainx <- diamond.smaller.train[,c("LCarat", "recipCarat", "Cut", "Color", "Clarity", "Polish", "Symmetry",
+                                  "Report", "Caratbelow1", "Caratequal1", "Caratbelow1.5","Caratequal1.5", 
+                                  "Caratbelow2", "Caratabove2")]
+trainy <- diamond.smaller.train$LPrice
+random.forest.cv <- rfcv(trainx, trainy,
+                         cv.folds = 10, scale="unit", step=-1, ntree=100)
+plot(x=1:14, y=rev(random.forest.cv$error.cv),
+     xlab="mtry parameter", ylab="Cross Validation Error",
+     main="Random Forest Cross Validation Results")
+```
+
+![](diamond-analysis_files/figure-markdown_github/prepare-data-for-rf-cv-training-1.png)
+
+The cross validation results above shows that the best number of `mtry` for random forest should be 9 (vs. 14). We will use this value when estimating our random forest model.
+
+``` r
+random.forest.cv$error.cv[random.forest.cv$error.cv==min(random.forest.cv$error.cv)]
+```
+
+    ##         9 
+    ## 0.0103964
+
+``` r
+random.forest.cv.1 <- randomForest(as.formula(model_formula), 
+                                   data=diamond.smaller.train, mtry=9, ntree=100,
+                                   importance=TRUE)
+random.forest.cv.1.pred.valid <- predict(random.forest.cv.1, newdata=diamond.validation)
+accuracy(exp(random.forest.cv.1.pred.valid), diamond.validation$Price)
+```
+
+    ##               ME    RMSE    MAE       MPE    MAPE
+    ## Test set 76.0959 1149.84 648.61 -0.398527 5.40707
+
+Finally, we can repeat the same procedures above on the full training set.
+
+``` r
+# perform cross validation to tune the model parameters
+trainx <- diamond.train[,c("LCarat", "recipCarat", "Cut", "Color", "Clarity", "Polish", "Symmetry",
+                           "Report", "Caratbelow1", "Caratequal1", "Caratbelow1.5","Caratequal1.5", 
+                           "Caratbelow2", "Caratabove2")]
+trainy <- diamond.train$LPrice
+random.forest.cv <- rfcv(trainx, 
+                         trainy,
+                         cv.folds=10, scale="unit", step=-1, ntree=100)
+
+# determine the best fitting model
+random.forest.cv$error.cv
+length(random.forest.cv$error.cv)
+plot(x=1:14, y=rev(random.forest.cv$error.cv),
+     xlab="mtry parameter", ylab="Cross Validation Error",
+     main="Random Forest Cross Validation Results")
+random.forest.cv$error.cv[random.forest.cv$error.cv==min(random.forest.cv$error.cv)]
+
+# use the optimal parameters to fit the final model
+random.forest.cv.1 <- randomForest(as.formula(model_formula), 
+                                   data=diamond.train, mtry=9, ntree=100,
+                                   importance=TRUE)
+# measure the accuracy
+random.forest.cv.1.pred <- predict(random.forest.cv.1, newdata=diamond.test)
+accuracy(exp(random.forest.cv.1.pred), diamond.test$Price)
+```
+
+### Boosted Trees
+
+The last tree-based model we will be using is a boosted tree model. We use cross validation to identify the best value for the parameter `n.trees`, which turns out to be 5,207.
+
+``` r
+boost <- gbm(as.formula(model_formula), data=diamond.smaller.train,
+             distribution = "gaussian",
+             n.trees=100, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
+plot(boost$cv.error)
+```
+
+![](diamond-analysis_files/figure-markdown_github/boosted-tree%20cv-1.png)
+
+``` r
+best_iteration <- which(boost$cv.error==min(boost$cv.error))
+best_iteration <- 5207
+```
+
+Using this `n.trees` parameter, we estimate the model on the smaller training set using 100 iterations, which yields a MAPE of 4.46% on the validation set, representing additional improvements over the random forest model. It looks like the model is continually getting better even at the 100th iteration. More iterations might help us find the true optimum number of trees to minimize prediction error.
+
+``` r
+boost.cv <- gbm(as.formula(model_formula), data=diamond.smaller.train,
+                distribution = "gaussian",
+                n.trees=best_iteration, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
+boost.cv.pred.valid <- predict(boost.cv, newdata=diamond.validation, n.trees=best_iteration)
+accuracy(exp(boost.cv.pred.valid), diamond.validation$Price)
+```
+
+    ##                ME     RMSE      MAE        MPE    MAPE
+    ## Test set 28.32441 971.3675 539.8008 -0.2647916 4.42206
+
+Finally, we repeat the same procedures above using the full dataset, including cross validation. Cross validation shows that 100 is the best value for `n.trees`, and using this parameter yields a MAPE of 4.23808% on the test set.
+
+``` r
+boost <- gbm(as.formula(model_formula), data=diamond.train,
+             distribution = "gaussian",
+             n.trees=100, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
+best_iteration <- which(boost$cv.error==min(boost$cv.error))
+best_iteration <- 5207
+boost.cv <- gbm(as.formula(model_formula), data=diamond.train,
+                distribution = "gaussian",
+                n.trees=best_iteration, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
+boost.cv.pred <- predict(boost.cv, newdata=diamond.test, n.trees=best_iteration)
+accuracy(exp(boost.cv.pred), diamond.test$Price)
+```
 
 ### Lasso Regression
 
@@ -1127,7 +1364,7 @@ plot(lm.regularized.cv, label = TRUE)
 abline(v = minLogLambda)
 ```
 
-![](diamond-analysis_files/figure-markdown_github/unnamed-chunk-7-1.png)
+![](diamond-analysis_files/figure-markdown_github/unnamed-chunk-3-1.png)
 
 ``` r
 lm.regularized <- glmnet(xtrain, ytrain, family = "gaussian", 
@@ -1135,7 +1372,7 @@ lm.regularized <- glmnet(xtrain, ytrain, family = "gaussian",
 plot(lm.regularized, xvar = "lambda", label = TRUE)
 ```
 
-![](diamond-analysis_files/figure-markdown_github/unnamed-chunk-8-1.png)
+![](diamond-analysis_files/figure-markdown_github/unnamed-chunk-4-1.png)
 
 ``` r
 lm.regularized.cv.pred.valid <- predict(lm.regularized.cv, newx = xtest, s = "lambda.min") 
@@ -1186,190 +1423,190 @@ coef(lm.regularized.cv, s = "lambda.min")
 ```
 
     ## 184 x 1 sparse Matrix of class "dgCMatrix"
-    ##                                            1
-    ## (Intercept)                   10.06621229047
-    ## LCarat                         0.91488872603
-    ## recipCarat                    -0.94363157436
-    ## Caratbelow1                   -0.08813392854
-    ## Caratequal1                    .            
-    ## Caratbelow1.5                 -0.03943500201
-    ## Caratequal1.5                  0.03692688501
-    ## Caratbelow2                    0.03493642390
-    ## Caratabove2                    0.24752448329
-    ## CutFair                       -0.08560336045
-    ## CutGood                       -0.03866032968
-    ## CutIdeal                       0.05486207543
-    ## CutSignatureIdeal              0.26286587208
-    ## CutVeryGood                    .            
-    ## ColorE                        -0.02312633590
-    ## ColorF                        -0.08855707612
-    ## ColorG                        -0.15430372044
-    ## ColorH                        -0.27910862058
-    ## ColorI                        -0.42414031326
-    ## ClarityIF                      0.46138327661
-    ## ClaritySI1                    -0.44588449226
-    ## ClarityVS1                    -0.15481312368
-    ## ClarityVS2                    -0.28833597272
-    ## ClarityVVS1                    0.16321523644
-    ## ClarityVVS2                    0.05438779750
-    ## PolishG                       -0.02655939978
-    ## PolishID                       0.00737721258
-    ## PolishVG                      -0.02385847664
-    ## SymmetryG                     -0.02743691826
-    ## SymmetryID                     0.00974045106
-    ## SymmetryVG                    -0.02416679761
-    ## ReportGIA                      0.04374013806
-    ## CutGood:ColorE                -0.00251971711
-    ## CutIdeal:ColorE               -0.00370973070
-    ## CutSignatureIdeal:ColorE      -0.05257879998
-    ## CutVeryGood:ColorE             .            
-    ## CutGood:ColorF                -0.01046266517
-    ## CutIdeal:ColorF               -0.00179156605
-    ## CutSignatureIdeal:ColorF      -0.06271931036
-    ## CutVeryGood:ColorF             .            
-    ## CutGood:ColorG                 0.00359119867
-    ## CutIdeal:ColorG               -0.01237646604
-    ## CutSignatureIdeal:ColorG      -0.06328838185
-    ## CutVeryGood:ColorG             .            
-    ## CutGood:ColorH                 0.00075139703
-    ## CutIdeal:ColorH               -0.01140406118
-    ## CutSignatureIdeal:ColorH      -0.05789719744
-    ## CutVeryGood:ColorH             0.00280655062
-    ## CutGood:ColorI                 .            
-    ## CutIdeal:ColorI               -0.03249422451
-    ## CutSignatureIdeal:ColorI      -0.06373461716
-    ## CutVeryGood:ColorI            -0.01024241905
-    ## CutGood:ClarityIF              0.00194732113
-    ## CutIdeal:ClarityIF             0.00538756638
-    ## CutSignatureIdeal:ClarityIF   -0.07251094675
-    ## CutVeryGood:ClarityIF          .            
-    ## CutGood:ClaritySI1            -0.01157560205
-    ## CutIdeal:ClaritySI1           -0.03440465229
-    ## CutSignatureIdeal:ClaritySI1  -0.04667192874
-    ## CutVeryGood:ClaritySI1        -0.02630817676
-    ## CutGood:ClarityVS1            -0.00380571101
-    ## CutIdeal:ClarityVS1            .            
-    ## CutSignatureIdeal:ClarityVS1  -0.04472830898
-    ## CutVeryGood:ClarityVS1         .            
-    ## CutGood:ClarityVS2             .            
-    ## CutIdeal:ClarityVS2           -0.00045800853
-    ## CutSignatureIdeal:ClarityVS2  -0.03339764277
-    ## CutVeryGood:ClarityVS2         .            
-    ## CutGood:ClarityVVS1           -0.01452652989
-    ## CutIdeal:ClarityVVS1           0.01704999048
-    ## CutSignatureIdeal:ClarityVVS1 -0.01503007442
-    ## CutVeryGood:ClarityVVS1        0.03968879431
-    ## CutGood:ClarityVVS2           -0.01405060895
-    ## CutIdeal:ClarityVVS2           0.00406904522
-    ## CutSignatureIdeal:ClarityVVS2 -0.03038980006
-    ## CutVeryGood:ClarityVVS2        .            
-    ## CutGood:PolishG                0.02124424288
-    ## CutIdeal:PolishG              -0.01166110492
-    ## CutSignatureIdeal:PolishG      .            
-    ## CutVeryGood:PolishG            .            
-    ## CutGood:PolishID               .            
-    ## CutIdeal:PolishID              .            
-    ## CutSignatureIdeal:PolishID     0.00148752257
-    ## CutVeryGood:PolishID           .            
-    ## CutGood:PolishVG               .            
-    ## CutIdeal:PolishVG             -0.01228519879
-    ## CutSignatureIdeal:PolishVG     .            
-    ## CutVeryGood:PolishVG           .            
-    ## CutGood:SymmetryG             -0.00339005525
-    ## CutIdeal:SymmetryG             0.00601209526
-    ## CutSignatureIdeal:SymmetryG    .            
-    ## CutVeryGood:SymmetryG          .            
-    ## CutGood:SymmetryID             .            
-    ## CutIdeal:SymmetryID            .            
-    ## CutSignatureIdeal:SymmetryID   .            
-    ## CutVeryGood:SymmetryID         0.00278351320
-    ## CutGood:SymmetryVG            -0.01179722522
-    ## CutIdeal:SymmetryVG           -0.00984060846
-    ## CutSignatureIdeal:SymmetryVG   .            
-    ## CutVeryGood:SymmetryVG         .            
-    ## CutGood:ReportGIA              .            
-    ## CutIdeal:ReportGIA             0.00289359558
-    ## CutSignatureIdeal:ReportGIA    .            
-    ## CutVeryGood:ReportGIA          .            
-    ## ColorE:ClarityIF              -0.20988177565
-    ## ColorF:ClarityIF              -0.27334496266
-    ## ColorG:ClarityIF              -0.45859576346
-    ## ColorH:ClarityIF              -0.53621515294
-    ## ColorI:ClarityIF              -0.56912017062
-    ## ColorE:ClaritySI1              .            
-    ## ColorF:ClaritySI1              .            
-    ## ColorG:ClaritySI1              .            
-    ## ColorH:ClaritySI1              0.07957892140
-    ## ColorI:ClaritySI1              0.11399053086
-    ## ColorE:ClarityVS1             -0.00673957709
-    ## ColorF:ClarityVS1             -0.00439814669
-    ## ColorG:ClarityVS1             -0.04366933812
-    ## ColorH:ClarityVS1             -0.07404192343
-    ## ColorI:ClarityVS1             -0.07889427139
-    ## ColorE:ClarityVS2              0.01649734268
-    ## ColorF:ClarityVS2              0.02742209520
-    ## ColorG:ClarityVS2              0.01776452661
-    ## ColorH:ClarityVS2              .            
-    ## ColorI:ClarityVS2              .            
-    ## ColorE:ClarityVVS1            -0.03589998734
-    ## ColorF:ClarityVVS1            -0.11116323733
-    ## ColorG:ClarityVVS1            -0.23319354180
-    ## ColorH:ClarityVVS1            -0.30166180150
-    ## ColorI:ClarityVVS1            -0.29029132040
-    ## ColorE:ClarityVVS2            -0.04117982290
-    ## ColorF:ClarityVVS2            -0.07138983545
-    ## ColorG:ClarityVVS2            -0.15357142083
-    ## ColorH:ClarityVVS2            -0.22592308170
-    ## ColorI:ClarityVVS2            -0.21781515004
-    ## ColorE:PolishG                -0.01422145715
-    ## ColorF:PolishG                -0.02130143888
-    ## ColorG:PolishG                 .            
-    ## ColorH:PolishG                 0.00367535141
-    ## ColorI:PolishG                 0.00361951022
-    ## ColorE:PolishID               -0.02076484052
-    ## ColorF:PolishID                .            
-    ## ColorG:PolishID               -0.00209812756
-    ## ColorH:PolishID               -0.00490163172
-    ## ColorI:PolishID                .            
-    ## ColorE:PolishVG                .            
-    ## ColorF:PolishVG               -0.01021185485
-    ## ColorG:PolishVG                0.00095928242
-    ## ColorH:PolishVG               -0.00004254773
-    ## ColorI:PolishVG                .            
-    ## ColorE:SymmetryG              -0.00859236584
-    ## ColorF:SymmetryG              -0.00273181250
-    ## ColorG:SymmetryG              -0.00196051661
-    ## ColorH:SymmetryG               0.00419956127
-    ## ColorI:SymmetryG               0.00374149438
-    ## ColorE:SymmetryID              .            
-    ## ColorF:SymmetryID              .            
-    ## ColorG:SymmetryID              .            
-    ## ColorH:SymmetryID              .            
-    ## ColorI:SymmetryID              0.00188950929
-    ## ColorE:SymmetryVG             -0.00704871807
-    ## ColorF:SymmetryVG              0.00271561382
-    ## ColorG:SymmetryVG              .            
-    ## ColorH:SymmetryVG              0.00658322836
-    ## ColorI:SymmetryVG              .            
-    ## ColorE:ReportGIA              -0.02750811771
-    ## ColorF:ReportGIA               .            
-    ## ColorG:ReportGIA               .            
-    ## ColorH:ReportGIA              -0.01777601662
-    ## ColorI:ReportGIA              -0.01080513485
-    ## PolishG:SymmetryG              .            
-    ## PolishID:SymmetryG             .            
-    ## PolishVG:SymmetryG             0.00482020675
-    ## PolishG:SymmetryID             .            
-    ## PolishID:SymmetryID            0.00020568851
-    ## PolishVG:SymmetryID            .            
-    ## PolishG:SymmetryVG             0.00032485164
-    ## PolishID:SymmetryVG            .            
-    ## PolishVG:SymmetryVG            0.01873860365
-    ## PolishG:ReportGIA              .            
-    ## PolishID:ReportGIA             .            
-    ## PolishVG:ReportGIA             .            
-    ## SymmetryG:ReportGIA            .            
-    ## SymmetryID:ReportGIA           .            
+    ##                                           1
+    ## (Intercept)                    1.006621e+01
+    ## LCarat                         9.148887e-01
+    ## recipCarat                    -9.436316e-01
+    ## Caratbelow1                   -8.813393e-02
+    ## Caratequal1                    .           
+    ## Caratbelow1.5                 -3.943500e-02
+    ## Caratequal1.5                  3.692689e-02
+    ## Caratbelow2                    3.493642e-02
+    ## Caratabove2                    2.475245e-01
+    ## CutFair                       -8.560336e-02
+    ## CutGood                       -3.866033e-02
+    ## CutIdeal                       5.486208e-02
+    ## CutSignatureIdeal              2.628659e-01
+    ## CutVeryGood                    .           
+    ## ColorE                        -2.312634e-02
+    ## ColorF                        -8.855708e-02
+    ## ColorG                        -1.543037e-01
+    ## ColorH                        -2.791086e-01
+    ## ColorI                        -4.241403e-01
+    ## ClarityIF                      4.613833e-01
+    ## ClaritySI1                    -4.458845e-01
+    ## ClarityVS1                    -1.548131e-01
+    ## ClarityVS2                    -2.883360e-01
+    ## ClarityVVS1                    1.632152e-01
+    ## ClarityVVS2                    5.438780e-02
+    ## PolishG                       -2.655940e-02
+    ## PolishID                       7.377213e-03
+    ## PolishVG                      -2.385848e-02
+    ## SymmetryG                     -2.743692e-02
+    ## SymmetryID                     9.740451e-03
+    ## SymmetryVG                    -2.416680e-02
+    ## ReportGIA                      4.374014e-02
+    ## CutGood:ColorE                -2.519717e-03
+    ## CutIdeal:ColorE               -3.709731e-03
+    ## CutSignatureIdeal:ColorE      -5.257880e-02
+    ## CutVeryGood:ColorE             .           
+    ## CutGood:ColorF                -1.046267e-02
+    ## CutIdeal:ColorF               -1.791566e-03
+    ## CutSignatureIdeal:ColorF      -6.271931e-02
+    ## CutVeryGood:ColorF             .           
+    ## CutGood:ColorG                 3.591199e-03
+    ## CutIdeal:ColorG               -1.237647e-02
+    ## CutSignatureIdeal:ColorG      -6.328838e-02
+    ## CutVeryGood:ColorG             .           
+    ## CutGood:ColorH                 7.513970e-04
+    ## CutIdeal:ColorH               -1.140406e-02
+    ## CutSignatureIdeal:ColorH      -5.789720e-02
+    ## CutVeryGood:ColorH             2.806551e-03
+    ## CutGood:ColorI                 .           
+    ## CutIdeal:ColorI               -3.249422e-02
+    ## CutSignatureIdeal:ColorI      -6.373462e-02
+    ## CutVeryGood:ColorI            -1.024242e-02
+    ## CutGood:ClarityIF              1.947321e-03
+    ## CutIdeal:ClarityIF             5.387566e-03
+    ## CutSignatureIdeal:ClarityIF   -7.251095e-02
+    ## CutVeryGood:ClarityIF          .           
+    ## CutGood:ClaritySI1            -1.157560e-02
+    ## CutIdeal:ClaritySI1           -3.440465e-02
+    ## CutSignatureIdeal:ClaritySI1  -4.667193e-02
+    ## CutVeryGood:ClaritySI1        -2.630818e-02
+    ## CutGood:ClarityVS1            -3.805711e-03
+    ## CutIdeal:ClarityVS1            .           
+    ## CutSignatureIdeal:ClarityVS1  -4.472831e-02
+    ## CutVeryGood:ClarityVS1         .           
+    ## CutGood:ClarityVS2             .           
+    ## CutIdeal:ClarityVS2           -4.580085e-04
+    ## CutSignatureIdeal:ClarityVS2  -3.339764e-02
+    ## CutVeryGood:ClarityVS2         .           
+    ## CutGood:ClarityVVS1           -1.452653e-02
+    ## CutIdeal:ClarityVVS1           1.704999e-02
+    ## CutSignatureIdeal:ClarityVVS1 -1.503007e-02
+    ## CutVeryGood:ClarityVVS1        3.968879e-02
+    ## CutGood:ClarityVVS2           -1.405061e-02
+    ## CutIdeal:ClarityVVS2           4.069045e-03
+    ## CutSignatureIdeal:ClarityVVS2 -3.038980e-02
+    ## CutVeryGood:ClarityVVS2        .           
+    ## CutGood:PolishG                2.124424e-02
+    ## CutIdeal:PolishG              -1.166110e-02
+    ## CutSignatureIdeal:PolishG      .           
+    ## CutVeryGood:PolishG            .           
+    ## CutGood:PolishID               .           
+    ## CutIdeal:PolishID              .           
+    ## CutSignatureIdeal:PolishID     1.487523e-03
+    ## CutVeryGood:PolishID           .           
+    ## CutGood:PolishVG               .           
+    ## CutIdeal:PolishVG             -1.228520e-02
+    ## CutSignatureIdeal:PolishVG     .           
+    ## CutVeryGood:PolishVG           .           
+    ## CutGood:SymmetryG             -3.390055e-03
+    ## CutIdeal:SymmetryG             6.012095e-03
+    ## CutSignatureIdeal:SymmetryG    .           
+    ## CutVeryGood:SymmetryG          .           
+    ## CutGood:SymmetryID             .           
+    ## CutIdeal:SymmetryID            .           
+    ## CutSignatureIdeal:SymmetryID   .           
+    ## CutVeryGood:SymmetryID         2.783513e-03
+    ## CutGood:SymmetryVG            -1.179723e-02
+    ## CutIdeal:SymmetryVG           -9.840608e-03
+    ## CutSignatureIdeal:SymmetryVG   .           
+    ## CutVeryGood:SymmetryVG         .           
+    ## CutGood:ReportGIA              .           
+    ## CutIdeal:ReportGIA             2.893596e-03
+    ## CutSignatureIdeal:ReportGIA    .           
+    ## CutVeryGood:ReportGIA          .           
+    ## ColorE:ClarityIF              -2.098818e-01
+    ## ColorF:ClarityIF              -2.733450e-01
+    ## ColorG:ClarityIF              -4.585958e-01
+    ## ColorH:ClarityIF              -5.362152e-01
+    ## ColorI:ClarityIF              -5.691202e-01
+    ## ColorE:ClaritySI1              .           
+    ## ColorF:ClaritySI1              .           
+    ## ColorG:ClaritySI1              .           
+    ## ColorH:ClaritySI1              7.957892e-02
+    ## ColorI:ClaritySI1              1.139905e-01
+    ## ColorE:ClarityVS1             -6.739577e-03
+    ## ColorF:ClarityVS1             -4.398147e-03
+    ## ColorG:ClarityVS1             -4.366934e-02
+    ## ColorH:ClarityVS1             -7.404192e-02
+    ## ColorI:ClarityVS1             -7.889427e-02
+    ## ColorE:ClarityVS2              1.649734e-02
+    ## ColorF:ClarityVS2              2.742210e-02
+    ## ColorG:ClarityVS2              1.776453e-02
+    ## ColorH:ClarityVS2              .           
+    ## ColorI:ClarityVS2              .           
+    ## ColorE:ClarityVVS1            -3.589999e-02
+    ## ColorF:ClarityVVS1            -1.111632e-01
+    ## ColorG:ClarityVVS1            -2.331935e-01
+    ## ColorH:ClarityVVS1            -3.016618e-01
+    ## ColorI:ClarityVVS1            -2.902913e-01
+    ## ColorE:ClarityVVS2            -4.117982e-02
+    ## ColorF:ClarityVVS2            -7.138984e-02
+    ## ColorG:ClarityVVS2            -1.535714e-01
+    ## ColorH:ClarityVVS2            -2.259231e-01
+    ## ColorI:ClarityVVS2            -2.178152e-01
+    ## ColorE:PolishG                -1.422146e-02
+    ## ColorF:PolishG                -2.130144e-02
+    ## ColorG:PolishG                 .           
+    ## ColorH:PolishG                 3.675351e-03
+    ## ColorI:PolishG                 3.619510e-03
+    ## ColorE:PolishID               -2.076484e-02
+    ## ColorF:PolishID                .           
+    ## ColorG:PolishID               -2.098128e-03
+    ## ColorH:PolishID               -4.901632e-03
+    ## ColorI:PolishID                .           
+    ## ColorE:PolishVG                .           
+    ## ColorF:PolishVG               -1.021185e-02
+    ## ColorG:PolishVG                9.592824e-04
+    ## ColorH:PolishVG               -4.254773e-05
+    ## ColorI:PolishVG                .           
+    ## ColorE:SymmetryG              -8.592366e-03
+    ## ColorF:SymmetryG              -2.731812e-03
+    ## ColorG:SymmetryG              -1.960517e-03
+    ## ColorH:SymmetryG               4.199561e-03
+    ## ColorI:SymmetryG               3.741494e-03
+    ## ColorE:SymmetryID              .           
+    ## ColorF:SymmetryID              .           
+    ## ColorG:SymmetryID              .           
+    ## ColorH:SymmetryID              .           
+    ## ColorI:SymmetryID              1.889509e-03
+    ## ColorE:SymmetryVG             -7.048718e-03
+    ## ColorF:SymmetryVG              2.715614e-03
+    ## ColorG:SymmetryVG              .           
+    ## ColorH:SymmetryVG              6.583228e-03
+    ## ColorI:SymmetryVG              .           
+    ## ColorE:ReportGIA              -2.750812e-02
+    ## ColorF:ReportGIA               .           
+    ## ColorG:ReportGIA               .           
+    ## ColorH:ReportGIA              -1.777602e-02
+    ## ColorI:ReportGIA              -1.080513e-02
+    ## PolishG:SymmetryG              .           
+    ## PolishID:SymmetryG             .           
+    ## PolishVG:SymmetryG             4.820207e-03
+    ## PolishG:SymmetryID             .           
+    ## PolishID:SymmetryID            2.056885e-04
+    ## PolishVG:SymmetryID            .           
+    ## PolishG:SymmetryVG             3.248516e-04
+    ## PolishID:SymmetryVG            .           
+    ## PolishVG:SymmetryVG            1.873860e-02
+    ## PolishG:ReportGIA              .           
+    ## PolishID:ReportGIA             .           
+    ## PolishVG:ReportGIA             .           
+    ## SymmetryG:ReportGIA            .           
+    ## SymmetryID:ReportGIA           .           
     ## SymmetryVG:ReportGIA           .
 
 ``` r
@@ -1377,7 +1614,7 @@ plot(lm.regularized.cv, label = TRUE)
 abline(v = minLogLambda)
 ```
 
-![](diamond-analysis_files/figure-markdown_github/unnamed-chunk-12-1.png)
+![](diamond-analysis_files/figure-markdown_github/unnamed-chunk-8-1.png)
 
 ``` r
 lm.regularized <- glmnet(xtrain, ytrain, family = "gaussian", 
@@ -1385,7 +1622,7 @@ lm.regularized <- glmnet(xtrain, ytrain, family = "gaussian",
 plot(lm.regularized, xvar = "lambda", label = TRUE)
 ```
 
-![](diamond-analysis_files/figure-markdown_github/unnamed-chunk-13-1.png)
+![](diamond-analysis_files/figure-markdown_github/unnamed-chunk-9-1.png)
 
 ``` r
 lm.regularized.cv.pred <- predict(lm.regularized.cv, newx = xtest, s = "lambda.min") 
@@ -1448,8 +1685,8 @@ Among the methods above, we have identified a few models that yield MAPE less th
 accuracy((exp(bag.tree.pred.valid)), diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE        MPE     MAPE
-    ## Test set 154.1329 1305.731 681.3833 -0.2749545 5.579907
+    ##                ME    RMSE      MAE        MPE     MAPE
+    ## Test set 54.93479 1145.96 651.0374 -0.3755985 5.467027
 
 ``` r
 accuracy((exp(random.forest.cv.1.pred.valid)), diamond.full.validation$Price)
@@ -1462,8 +1699,8 @@ accuracy((exp(random.forest.cv.1.pred.valid)), diamond.full.validation$Price)
 accuracy((exp(boost.cv.pred.valid)), diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE     MAPE
-    ## Test set 1738.549 5741.276 3028.095 -4.254665 23.42987
+    ##                ME     RMSE      MAE        MPE    MAPE
+    ## Test set 28.32441 971.3675 539.8008 -0.2647916 4.42206
 
 ``` r
 accuracy((exp(lm.pred.valid)), diamond.full.validation$Price)
@@ -1473,11 +1710,11 @@ accuracy((exp(lm.pred.valid)), diamond.full.validation$Price)
     ## Test set 40.44794 1148.506 661.4527 -0.5542636 5.512112
 
 ``` r
-accuracy((exp(lm.step.pred)), diamond.full.validation$Price)
+accuracy((exp(lm.step.pred.valid)), diamond.full.validation$Price)
 ```
 
-    ##                 ME     RMSE      MAE       MPE    MAPE
-    ## Test set -227.3012 13648.32 9440.324 -66.66743 112.395
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 40.44794 1148.506 661.4527 -0.5542636 5.512112
 
 ``` r
 accuracy(as.numeric((exp(lm.regularized.pred.valid))), diamond.full.validation$Price)
@@ -1491,42 +1728,42 @@ accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid))/2, diam
 ```
 
     ##                ME     RMSE      MAE        MPE     MAPE
-    ## Test set 115.1144 1190.702 649.2518 -0.3367408 5.391522
+    ## Test set 65.51534 1137.684 645.4508 -0.3870628 5.403685
 
 ``` r
 accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid))/2, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE      MPE     MAPE
-    ## Test set 946.3408 3294.884 1701.028 -2.26481 13.25728
+    ##               ME     RMSE     MAE       MPE     MAPE
+    ## Test set 41.6296 994.7589 565.792 -0.320195 4.719538
 
 ``` r
 accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid))/2, diamond.full.validation$Price)
 ```
 
-    ##               ME     RMSE      MAE        MPE     MAPE
-    ## Test set 97.2904 1091.382 613.3998 -0.4146091 5.015828
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 47.69137 1018.192 592.2473 -0.4649311 4.993638
 
 ``` r
-accuracy(((exp(bag.tree.pred.valid))+exp(lm.step.pred))/2, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(lm.step.pred.valid))/2, diamond.full.validation$Price)
 ```
 
-    ##                 ME     RMSE      MAE       MPE     MAPE
-    ## Test set -36.58418 7047.496 4826.144 -33.47119 56.90047
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 47.69137 1018.192 592.2473 -0.4649311 4.993638
 
 ``` r
 accuracy(((exp(bag.tree.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE        MPE     MAPE
-    ## Test set 96.39343 1097.692 613.0092 -0.4276754 5.021788
+    ##               ME     RMSE      MAE        MPE     MAPE
+    ## Test set 46.7944 1015.909 588.7834 -0.4779974 4.983346
 
 ``` r
 accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid))/2, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE     MAPE
-    ## Test set 907.3224 3134.891 1645.565 -2.326596 12.92705
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 52.21015 995.4822 567.3312 -0.3316593 4.701738
 
 ``` r
 accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid))/2, diamond.full.validation$Price)
@@ -1536,11 +1773,11 @@ accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid))/2, diamond.fu
     ## Test set 58.27192 1028.711 595.6248 -0.4763953 4.98239
 
 ``` r
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.step.pred))/2, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.step.pred.valid))/2, diamond.full.validation$Price)
 ```
 
-    ##                 ME     RMSE      MAE       MPE     MAPE
-    ## Test set -75.60266 6951.264 4789.609 -33.53298 56.76241
+    ##                ME     RMSE      MAE        MPE    MAPE
+    ## Test set 58.27192 1028.711 595.6248 -0.4763953 4.98239
 
 ``` r
 accuracy(((exp(random.forest.cv.1.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
@@ -1553,29 +1790,29 @@ accuracy(((exp(random.forest.cv.1.pred.valid))+as.numeric(exp(lm.regularized.pre
 accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid))/2, diamond.full.validation$Price)
 ```
 
-    ##                ME    RMSE      MAE       MPE     MAPE
-    ## Test set 889.4984 3138.58 1611.443 -2.404464 12.40941
+    ##                ME     RMSE      MAE        MPE    MAPE
+    ## Test set 34.38618 1000.268 572.0866 -0.4095276 4.71909
 
 ``` r
-accuracy(((exp(boost.cv.pred.valid))+exp(lm.step.pred))/2, diamond.full.validation$Price)
+accuracy(((exp(boost.cv.pred.valid))+exp(lm.step.pred.valid))/2, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE     MAPE
-    ## Test set 755.6238 8985.518 5938.499 -35.46105 64.95293
+    ##                ME     RMSE      MAE        MPE    MAPE
+    ## Test set 34.38618 1000.268 572.0866 -0.4095276 4.71909
 
 ``` r
 accuracy(((exp(boost.cv.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE     MAPE
-    ## Test set 888.6014 3143.679 1611.092 -2.417531 12.41692
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 33.48921 992.0552 569.3943 -0.4225939 4.712036
 
 ``` r
-accuracy(((exp(lm.pred.valid))+exp(lm.step.pred))/2, diamond.full.validation$Price)
+accuracy(((exp(lm.pred.valid))+exp(lm.step.pred.valid))/2, diamond.full.validation$Price)
 ```
 
-    ##                 ME     RMSE      MAE       MPE    MAPE
-    ## Test set -93.42663 6968.844 4781.664 -33.61085 56.5179
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 40.44794 1148.506 661.4527 -0.5542636 5.512112
 
 ``` r
 accuracy(((exp(lm.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
@@ -1585,109 +1822,109 @@ accuracy(((exp(lm.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/2, di
     ## Test set 39.55098 1140.458 658.2261 -0.5673299 5.493493
 
 ``` r
-accuracy(((exp(lm.step.pred))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
+accuracy(((exp(lm.step.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE    MAE       MPE     MAPE
-    ## Test set -94.3236 6971.408 4781.5 -33.62391 56.52424
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 39.55098 1140.458 658.2261 -0.5673299 5.493493
 
 ``` r
 accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid))/3, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE     MAPE
-    ## Test set 656.2592 2413.318 1247.172 -1.642716 9.878076
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 53.11836 1028.511 587.0046 -0.3463057 4.895199
 
 ``` r
 accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.pred.valid))/3, diamond.full.validation$Price)
 ```
 
-    ##                ME    RMSE      MAE        MPE     MAPE
-    ## Test set 90.22556 1070.95 606.7842 -0.4092484 5.022235
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 57.15954 1032.942 597.7987 -0.4427964 5.026136
 
 ``` r
 accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
 ```
 
-    ##                 ME     RMSE      MAE       MPE     MAPE
-    ## Test set 0.9758435 4811.057 3272.868 -22.44697 38.42672
+    ##                ME     RMSE      MAE       MPE     MAPE
+    ## Test set -29.6834 4724.968 3240.548 -22.44548 38.30009
 
 ``` r
 accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
 ```
 
     ##                ME     RMSE      MAE        MPE     MAPE
-    ## Test set 89.62759 1075.526 606.5169 -0.4179593 5.023997
+    ## Test set 56.56157 1033.727 596.8723 -0.4515073 5.025347
 
 ``` r
 accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid))/3, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE     MAPE
-    ## Test set 644.3765 2394.577 1224.034 -1.694628 9.512041
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 41.23571 973.6155 561.3881 -0.3982179 4.692153
 
 ``` r
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred.valid))/3, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE     MAPE
-    ## Test set 555.1268 6183.384 4040.906 -23.73235 43.92068
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 41.23571 973.6155 561.3881 -0.3982179 4.692153
 
 ``` r
 accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE     MAE       MPE     MAPE
-    ## Test set 643.7786 2399.456 1224.06 -1.703339 9.520296
+    ##                ME    RMSE      MAE        MPE     MAPE
+    ## Test set 40.63774 970.364 559.7708 -0.4069288 4.689482
 
 ``` r
-accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred.valid))/3, diamond.full.validation$Price)
 ```
 
-    ##                 ME     RMSE     MAE       MPE     MAPE
-    ## Test set -10.90681 4811.927 3265.39 -22.49888 38.23124
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 45.27689 1033.797 603.7961 -0.4947086 5.059648
 
 ``` r
 accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
 ```
 
     ##                ME     RMSE      MAE        MPE     MAPE
-    ## Test set 77.74494 1078.622 613.2296 -0.4698715 5.044681
+    ## Test set 44.67892 1030.292 600.5931 -0.5034195 5.049771
 
 ``` r
-accuracy(((exp(bag.tree.pred.valid))+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
 ```
 
-    ##                 ME     RMSE      MAE       MPE     MAPE
-    ## Test set -11.50478 4814.528 3265.447 -22.50759 38.23708
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 44.67892 1030.292 600.5931 -0.5034195 5.049771
 
 ``` r
 accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid))/3, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE     MAPE
-    ## Test set 618.3642 2293.528 1186.422 -1.735819 9.304075
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 48.28941 978.3384 563.1687 -0.4058608 4.684413
 
 ``` r
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred.valid))/3, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE     MAPE
-    ## Test set 529.1145 6100.888 4012.174 -23.77354 43.78121
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 48.28941 978.3384 563.1687 -0.4058608 4.684413
 
 ``` r
 accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE      MPE     MAPE
-    ## Test set 617.7662 2297.432 1186.384 -1.74453 9.311662
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 47.69144 976.5035 561.3967 -0.4145717 4.683054
 
 ``` r
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred.valid))/3, diamond.full.validation$Price)
 ```
 
-    ##                 ME     RMSE      MAE       MPE     MAPE
-    ## Test set -36.91913 4747.567 3240.831 -22.54007 38.14256
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 52.33059 1042.538 604.9404 -0.5023514 5.048649
 
 ``` r
 accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
@@ -1697,207 +1934,193 @@ accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid)+as.numeric(exp
     ## Test set 51.73262 1040.377 601.7679 -0.5110623 5.03768
 
 ``` r
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE     MAPE
-    ## Test set -37.5171 4749.628 3240.792 -22.54879 38.14757
+    ##                ME     RMSE      MAE        MPE    MAPE
+    ## Test set 51.73262 1040.377 601.7679 -0.5110623 5.03768
 
 ``` r
-accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
+accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred.valid))/3, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE     MAE       MPE   MAPE
-    ## Test set 517.2319 6110.665 4001.51 -23.82545 43.537
+    ##                ME   RMSE      MAE        MPE     MAPE
+    ## Test set 36.40676 1038.1 597.5316 -0.4577729 4.944798
 
 ``` r
 accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE     MAE       MPE     MAPE
-    ## Test set 605.8836 2322.904 1178.13 -1.796442 9.098394
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 35.80879 1032.089 594.5059 -0.4664838 4.931228
 
 ``` r
-accuracy(((exp(boost.cv.pred.valid))+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
+accuracy(((exp(boost.cv.pred.valid))+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE     MAPE
-    ## Test set 516.6339 6113.376 4001.656 -23.83417 43.54503
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 35.80879 1032.089 594.5059 -0.4664838 4.931228
 
 ``` r
-accuracy(((exp(lm.pred.valid))+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
+accuracy(((exp(lm.pred.valid))+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
 ```
 
-    ##                 ME    RMSE     MAE      MPE     MAPE
-    ## Test set -49.39975 4772.33 3238.91 -22.6007 38.01339
-
-``` r
-head(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid))/3)
-```
-
-    ##         1         9        10        11        16        19 
-    ##  5792.066 17933.941  7833.305  5458.646 20888.165  4823.899
-
-``` r
-head((exp(random.forest.cv.1.pred.valid)))
-```
-
-    ##         1         9        10        11        16        19 
-    ##  5359.065 18310.982  7724.423  5467.087 22774.790  4095.040
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 39.84997 1142.676 659.0316 -0.5629745 5.498411
 
 ``` r
 accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid))/4, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE     MAE       MPE     MAPE
-    ## Test set 502.3064 1971.511 1018.56 -1.370603 8.045597
+    ##                ME     RMSE      MAE        MPE    MAPE
+    ## Test set 49.95076 990.1215 570.6605 -0.3982952 4.77358
 
 ``` r
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.step.pred))/4, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.step.pred.valid))/4, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE      MPE     MAPE
-    ## Test set 435.3691 4735.382 3077.472 -17.8989 33.36664
+    ##                ME     RMSE      MAE        MPE    MAPE
+    ## Test set 49.95076 990.1215 570.6605 -0.3982952 4.77358
 
 ``` r
 accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
 ```
 
-    ##                ME    RMSE      MAE       MPE     MAPE
-    ## Test set 501.8579 1975.37 1018.673 -1.377136 8.052988
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 49.50228 989.3728 569.8293 -0.4048284 4.771507
 
 ``` r
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred))/4, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred.valid))/4, diamond.full.validation$Price)
 ```
 
-    ##                ME    RMSE      MAE       MPE     MAPE
-    ## Test set 10.84387 3704.99 2496.415 -16.97379 29.11191
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 52.98164 1020.609 592.0092 -0.4706632 4.974614
 
 ``` r
 accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
 ```
 
+    ##                ME    RMSE      MAE        MPE     MAPE
+    ## Test set 52.53316 1019.63 590.5167 -0.4771964 4.968302
+
+``` r
+accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
+```
+
+    ##                ME    RMSE      MAE        MPE     MAPE
+    ## Test set 52.53316 1019.63 590.5167 -0.4771964 4.968302
+
+``` r
+accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred.valid))/4, diamond.full.validation$Price)
+```
+
     ##                ME     RMSE      MAE        MPE     MAPE
-    ## Test set 77.33268 1050.408 599.4384 -0.4520354 4.968122
-
-``` r
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-```
-
-    ##                ME    RMSE     MAE       MPE     MAPE
-    ## Test set 10.39539 3707.17 2496.58 -16.98033 29.11868
-
-``` r
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred))/4, diamond.full.validation$Price)
-```
-
-    ##                ME    RMSE      MAE       MPE     MAPE
-    ## Test set 426.4571 4736.51 3067.367 -17.93783 33.16568
+    ## Test set 41.03877 991.9249 574.9708 -0.4372293 4.798085
 
 ``` r
 accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE      MPE     MAPE
-    ## Test set 492.9459 1977.831 1011.159 -1.41607 7.874433
+    ##                ME    RMSE      MAE        MPE     MAPE
+    ## Test set 40.59029 988.661 572.6283 -0.4437625 4.790984
 
 ``` r
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE     MAE       MPE     MAPE
-    ## Test set 426.0086 4739.021 3067.45 -17.94436 33.17164
+    ##                ME    RMSE      MAE        MPE     MAPE
+    ## Test set 40.59029 988.661 572.6283 -0.4437625 4.790984
 
 ``` r
-accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
 ```
 
-    ##              ME     RMSE      MAE       MPE     MAPE
-    ## Test set 1.4834 3715.943 2493.635 -17.01926 29.00156
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 43.62117 1049.312 611.7683 -0.5161305 5.123025
 
 ``` r
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred))/4, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred.valid))/4, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE     MAPE
-    ## Test set 406.9479 4674.954 3045.303 -17.96872 33.05778
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 46.32905 996.9586 575.6492 -0.4429615 4.786447
 
 ``` r
 accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE     MAE       MPE    MAPE
-    ## Test set 473.4367 1906.036 984.779 -1.446963 7.73848
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 45.88056 994.4847 573.9327 -0.4494946 4.781373
 
 ``` r
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE    MAPE
-    ## Test set 406.4994 4677.169 3045.272 -17.97526 33.0629
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 45.88056 994.4847 573.9327 -0.4494946 4.781373
 
 ``` r
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
 ```
 
-    ##                 ME     RMSE     MAE       MPE     MAPE
-    ## Test set -18.02584 3667.395 2475.34 -17.05016 28.93916
+    ##                ME     RMSE    MAE        MPE     MAPE
+    ## Test set 48.91145 1057.179 612.74 -0.5218626 5.114418
 
 ``` r
-accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
+accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE     MAE       MPE     MAPE
-    ## Test set 397.5874 4690.787 3040.59 -18.01419 32.91886
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 36.96858 1056.977 609.5035 -0.4884288 5.060979
 
 ``` r
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.step.pred)))/5, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.step.pred.valid)))/5, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE     MAPE
-    ## Test set 356.3849 3874.107 2495.098 -14.42997 26.91082
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 48.05019 989.7177 571.7821 -0.4294889 4.785624
 
 ``` r
 accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE     MAPE
-    ## Test set 409.5759 1729.713 898.2334 -1.212561 7.098038
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 47.69141 988.2969 570.6465 -0.4347154 4.782432
 
 ``` r
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE     MAE      MPE     MAPE
-    ## Test set 356.0261 3876.243 2495.21 -14.4352 26.91599
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 47.69141 988.2969 570.6465 -0.4347154 4.782432
 
 ``` r
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
 ```
 
-    ##               ME     RMSE      MAE       MPE     MAPE
-    ## Test set 16.4059 3058.078 2038.817 -13.69512 23.60366
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 50.11612 1025.465 595.4167 -0.4926098 4.999117
 
 ``` r
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE    MAPE
-    ## Test set 348.8965 3882.108 2489.503 -14.46634 26.7862
+    ##                ME     RMSE      MAE        MPE    MAPE
+    ## Test set 40.56182 1008.803 585.9314 -0.4658627 4.89129
 
 ``` r
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
+accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE     MAE       MPE    MAPE
-    ## Test set 333.2891 3833.024 2471.75 -14.49106 26.7008
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 44.79404 1013.984 586.4854 -0.4704484 4.882159
 
 ``` r
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.step.pred))+as.numeric(exp(lm.regularized.pred.valid)))/6, diamond.full.validation$Price)
+accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.step.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/6, diamond.full.validation$Price)
 ```
 
-    ##                ME     RMSE      MAE       MPE     MAPE
-    ## Test set 303.4297 3311.005 2112.275 -12.12171 22.67146
+    ##                ME     RMSE      MAE        MPE     MAPE
+    ## Test set 46.48416 997.3985 577.3475 -0.4546401 4.832255
 
 Summary of Analysis & Areas for Further Research
 ================================================
