@@ -19,7 +19,7 @@ session:
  - Start running the code from the script to see what it does by clicking the "Run" 
  button in top right of script
  
-If you need instructions on how to setup your computer go here: 
+If you need instructions on how to setup your computer go here:  
 https://github.com/DardenDSC/intro-to-r-programming#installing-r-and-rstudio
  
 ### Installing R Packages
