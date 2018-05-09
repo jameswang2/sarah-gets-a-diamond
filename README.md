@@ -13,28 +13,19 @@ the right diamond for his bride-to-be, Sarah.
  - [Source](#source)
  
 ### Following Along
-The best way to learn from this session is to open up RStudio and follow along 
-with the script [`diamond-analysis.md`](diamond-analysis.md). Simply copy-paste 
-the commands from the script into your R Console and see what they do. Keep reading 
-for more information on setting up your computer to run R and RStudio.
+The best way to learn R is to try it out for yourself. After downloading the R and 
+RStudio software, open up RStudio and start running the code to see what it does. For this 
+session: 
+ - Open up RStudio, click File -> New File -> R Script
+ - Go to [`script.R`](script.R) and copy/paste all the code into your new, blank script
+ - Start running the code from the script to see what it does by clicking the "Run" 
+ button in top right of script
  
-### System Setup
-The R programming language will be utilized in this analysis of diamonds. Using 
-R requires installing it locally on your computer and some basic knowledge to run 
-the code that performs the analysis.
-
-#### Installing R and RStudio
-First, install [R](http://www.r-project.org/) and [RStudio](https://www.rstudio.com/products/rstudio/#Desktop). 
-There are some instructions available [here](http://stat545.com/block000_r-rstudio-install.html) to 
-aid in the installation process. RStudio is called an "IDE", or interactive development environment, 
-which means that its a specific software tool for allowing you to write and execute 
-R code to develop your analyses. It is highly recommended that you install and use 
-RStudio. Once you've installed R and RStudio you may want to review some materials 
-to understand how to use it. The article [R basics, workspace and working directory, RStudio projects](http://stat545.com/block002_hello-r-workspace-wd-project.html) provides a 
-very good introduction to using R.
-
+If you need instructions on how to setup your computer go here: 
+https://github.com/DardenDSC/intro-to-r-programming#installing-r-and-rstudio
+ 
 #### Installing R Packages
-Second, R uses "packages" of functions that people develop to perform very specific 
+R uses "packages" of functions that people develop to perform very specific 
 routines in R, like fitting a decision tree. These packages must be installed before 
 referencing them, so in order to run code in this repository you must first open 
 up RStudio, and copy-paste the following code into your Console. Don't be alarmed if 
@@ -44,21 +35,10 @@ to do some advanced machine learning!
 
 ```
 # data manipulation packages
-install.packages("MASS")
-install.packages("dplyr")
-install.packages("tidyr")
-install.packages("lubridate")
-# time series packages
-install.packages("zoo")
-install.packages("forecast")
-install.packages("tseries")
+install.packages("tidyverse")
 # modeling packages
 install.packages("rpart")
 install.packages("rpart.plot")
-install.packages("glmnet")
-install.packages("randomForest")
-install.packages("gbm")
-install.packages("here")
 ```
 
 ### The Data
@@ -81,17 +61,6 @@ Symmetry | character | One of four values indicating the diamond's symmetry (`ID
 Report | character | One of of two values `"AGSL"` or `"GIA"` indicating which grading agency reported the qualities of the diamond qualities
 Price | numeric | The amount in USD that the diamond is valued
 Dataset | character | One of two values `"Train"` or `"Test"` indicating whether the observation should be used to train the model or in a test of its accuracy
-
-### Converting Rmd to R Script
-If you would like a `.R` file that contains just the source code without annotations, 
-it is available at [`diamond-analysis.R`](diamond-analysis.R). The file entitled `"diamond-analysis.Rmd"` was converted into this `.R` script by using 
-the nifty function backstich created by Garrick Aden-Blue and written about on his [blog](https://www.garrickadenbuie.com/blog/2017/10/17/convert-r-markdown-rmd-files-to-r-scripts/). Specifically the commands we used were:
-
-```
-devtools::source_gist('284671997992aefe295bed34bb53fde6', filename = 'backstitch.R')
-output <- backstitch("diamond-analysis.Rmd", output_type = 'script', chunk_header = "#+")
-cat(output, file="diamond-analysis.R", sep = "\n")
-```
 
 ### Source
 This case was prepared by Greg Mills (MBA ’07) under the supervision of Phillip E. 
