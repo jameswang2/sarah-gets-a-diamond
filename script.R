@@ -7,17 +7,15 @@
 
 # install R packages if you don't already have them ----------------------------
 install.packages("tidyverse")
-install.packages("glmnet")
 install.packages("rpart")
-install.packages("randomForest")
+install.packages("rpart.plot")
 
 
 # setup your R environment -----------------------------------------------------
 options(scipen=999, digits=6)
 suppressMessages(library(tidyverse))
-suppressMessages(library(glmnet))
 suppressMessages(library(rpart))
-suppressMessages(library(randomForest))
+suppressMessages(library(rpart.plot))
 
 # read the data ----------------------------------------------------------------
 raw_diamond_dat <- read_csv("https://raw.githubusercontent.com/DardenDSC/sarah-gets-a-diamond/master/data/diamond-data.csv", 
@@ -28,603 +26,246 @@ raw_diamond_dat <- read_csv("https://raw.githubusercontent.com/DardenDSC/sarah-g
 # we make any mistakes while messing with a formatted copy
 diamond_dat <- raw_diamond_dat
 
-#' To facilitate subsequent regressions, we will do a minor cleaning of the `cut`
-#' variable to remove the space and the hyphen in its values ("Signature-Ideal" and 
-#' "Very Good"). We will also create a log transformation and a reciprocal of Carat 
-#' Weight and several bins variables for Carat Weight. These bin values were determined 
-#' based on a subsequent scatter plot between price and carat weight.
 
-#+ prepare-variables-for-modeling
+# prepare the data for modeling ------------------------------------------------
+
+# If you remember back in Decision Analysis (DA) class you must first explore the 
+# data, format it, determine if variables should be transformed to make it more linear. 
+# This step is typically called "data munging" or "data wrangling" and is said to 
+# constitute ~80% of the time dedicated towards building a predictive model. Once you 
+# have the data in a good format, it is easy to train a model. Let's start by doing that 
+# cleaning process.
+
+# In this step the "mutate()" function creates new variables based on transformations 
+# of existing variables. log(Price) is creating the log transform of the price variable.
+
+diamond_dat <- diamond_dat %>%
+  mutate(log_price = log(price),
+         log_carat_weight = log(carat_weight),
+         carat_weight_binned = cut(carat_weight, 
+                                   breaks = c(0,1.5,2,Inf), 
+                                   labels = c("0.00-1.49", "1.50-1.99", "2.00+"),
+                                   right = FALSE))
+
+# If we are trying to predict price, then it makes sense to first compare that with 
+# carat weight. A diamond's value is related to how big it is. An initial scatterplot 
+# of the Price vs. Carat Weight shows that Carat Weight typically falls into three 
+# distinct buckets: 0-1.5, 1.5-2, and 2+. Also, there is heteroskedasticity (non-constant variance) 
+# that is happening with each bucket. The variance is getting amplified.
+
+ggplot(data=diamond_dat, mapping=aes(x=carat_weight, y=price)) +
+  geom_point(aes(color=carat_weight_binned)) + 
+  labs(x = "Carat Weight", 
+       y = "Price", 
+       col = "Carat Weight Binned") + 
+  ggtitle("Relationship between Carat Weight and Price") + 
+  theme_bw()
+
+# Not only visually can we see that there is heteroskedasticity, we can calculate 
+# the standard deviation and see that its larger for diamonds weighing greather than 2 carats
+diamond_dat %>% 
+  group_by(carat_weight_binned) %>% 
+  summarize(std_dev = sd(price))
+
+# typically heteroskedasticity at larger values means it is long-tailed (mostly smaller 
+# values and some really large ones). A good transformation for long-tailed data is 
+# the natural log transformation. Above in the mutate step we calculated the log transform. 
+# If we re-plot the data using the log price, then we can see that heteroskedasticity 
+# issue is now fixed.
+
+ggplot(data=diamond_dat, mapping=aes(x=carat_weight, y=log_price)) +
+  geom_point(aes(color=carat_weight_binned)) + 
+  labs(x = "Carat Weight", 
+       y = "Log Price", 
+       col = "Carat Weight Binned") + 
+  ggtitle("Relationship between Carat Weight and Log Price") + 
+  theme_bw()
+
+# However, looking at this plot we see that the relationship is no longer linear. 
+# In some sense we've fixed the heteroskedasticity, but created a non-linear relationship. 
+# If we check the first plot, it appeared linear, so why don't we transform carat 
+# with the log transform the same way we did to price. This will keep our heteroskedasticity 
+# fix, but then bring back the linear relationship. Let's look at the plot:
+
+ggplot(data=diamond_dat, mapping=aes(x=log_carat_weight, y=log_price)) +
+  geom_point(aes(color=carat_weight_binned)) + 
+  labs(x = "Log Carat Weight", 
+       y = "Log Price", 
+       col = "Carat Weight Binned") + 
+  ggtitle("Relationship between Log Carat Weight and Log Price") + 
+  theme_bw()
+
+# Now that we've got some transformed variables and we are confident in the linearity 
+# assumption, we'll move on to modeling. Before we start though we will split the 
+# dataset into two parts: 1) Train and 2) Test. The train dataset is used to build 
+# the model. The test dataset is used to evaluate how well the model performs 
+# against data that it has not seen before. This will give us a good sense for the 
+# accuracy of our model when we deploy it against new data in the real world.
+
+diamond_dat_train <- filter(diamond_dat, dataset == "Train")
+diamond_dat_test <- filter(diamond_dat, dataset == "Test")
+
+
+# building a regression model in R ---------------------------------------------
+
+# In R the function called "lm()" will fit a linear model. Just like you do in StatTools 
+# you will have to tell R which variables to use as the independent and dependent variables. 
+# In this case, let's start simple with using the log carat weight to predict the log price. 
+# In R you specify this relationship like this: log_price ~ log_carat_weight. 
+
+my_regression_model <- lm(log_price ~ log_carat_weight, 
+                          data = diamond_dat_train)
+my_regression_model
+
+# You'll notice that when you print the model to the screen it tells you the coefficients. 
+# The intercept and the coefficient weight for log_carat_weight. This is a simple 
+# overview of the model but you can get more statistics about your model. The 
+# "summary()" function will tell you the p-values, R-squared, and more!
+summary(my_regression_model)
+
+
+# assumptions testing on the residuals -----------------------------------------
+
+# Remember back in DA when you were told that linear regresssions have assumptions 
+# and that you must check those assumptions to see if the model is valid? The assumptions 
+# you need to test are that: 
+#  1. The residuals are normally distributed
+#  2. The residuals are independent (no pattern over time)
+#  3. The residuals have constant variance
+
+# R saves the residuals from your model so you can test all of these assumptions 
+# quickly. Here are the first six residuals:
+head(residuals(my_regression_model))
+
+# In order to check if the residuals are normal, you must perform a Kolmogorov-Smirnov test. 
+# If the p-value is significant, then it means that the residuals are not normally distributed
+ks.test(x=my_regression_model$residuals, y="pnorm")
+
+# Here we see that the p-value is very low meaning that the data are not normal. 
+# If you plot the data it appears that they are close to being normal. This is common 
+# in data analysis when you have thousands of records. It's easy to make something significant
+# even if it's only a slight difference. We will proceed with the analysis assuming normality.
+ggplot() + 
+  geom_histogram(aes(my_regression_model$residuals))
+
+# Another common technique is to plot the residuals across the fitted values to see 
+# if the variance is increasing or decreasing over our predictions. 
+ggplot() + 
+  geom_point(aes(x = my_regression_model$fitted.values, 
+                 y = my_regression_model$residuals))
+
+# Here we see that they are relatively constant. Good enough to pass the test. 
+# Finally, let's check to see if the residuals are independent.
+ggplot() + 
+  geom_point(aes(x = seq.int(length(my_regression_model$residuals)),
+                 y = my_regression_model$residuals))
+
+# It's hard to tell from the plot because there are so many points, but things appear 
+# to not have a pattern across the chart, so we're good to go on testing independence.
+
+# selecting variables in a regression model ------------------------------------
+
+# You may remember that StatTools had a feature that performed "Stepwise" regression 
+# where you specified a list of candidate variables and StatTools went through a 
+# process to determine which variables were significant enough to include in your 
+# model. R has the same process so you don't have to always tell it which variables 
+# to include. 
+
+stepwise_reg_model <- step(lm(log_price ~ log_carat_weight + cut + color + clarity + report, 
+                              data = diamond_dat_train))
+
+# Looking at the stepwise model it determined that all the variables we included were 
+# significant. You can look at the p-values to confirm.
+summary(stepwise_reg_model)
+
+# A summary of what's been shown so far: 
+#  - How to read in a CSV file
+#  - How to create transformations on the data
+#  - How to plot the data
+#  - How to build a multiple linear regression model
+#  - How to check the assumptions of a regression model
+#  - How to build a stepwise linear regression model
+
+# Regression is a great tool, but some people criticize it's ability to handle 
+# more complex, non-linear relationships along with it being hard to understand 
+# for people who don't know much about statistics. Let's check out a different type 
+# of model called a Decision Tree.
+
+# building a decision tree model -----------------------------------------------
+
+# A decision tree predictive model is not exactly like the one you may have learned 
+# about in DA class. In DA class that was talking about a logic tree that followed 
+# through all the potential logical outcomes in order to help you chose the best one. 
+# In machine learning a decision tree is a learned pattern from the data that shows 
+# you the logic on how to predict a value given some inputs. 
+
+# The function "rpart()" creates a tree for you by picking the best variables. The 
+# function is very similar to the "lm()" function in that you tell it which variables 
+# to consider by using the notation log_price ~ log_carat_weight + cut + color + clarity + report
+
+my_decision_tree <- rpart(log_price ~ log_carat_weight + clarity + report, 
+                          data = diamond_dat_train)
+
+# Just like with the regression, if you use the "summary()" function then you will 
+# see more details about the tree. This may seem complex at first, so after the 
+# summary we will try to visualize what is happening by using "rpart.plot()"
+
+summary(my_decision_tree)
+
+rpart.plot(my_decision_tree)
+
+# You can see in the output how the tree would make a prediction about the price. 
+# At first it looks at the log_carat_weight and if it is less than .33 (~1.4 carats) 
+# then it moves to the left side of the tree. From there it checks whether the carat 
+# weight is less than -.005 (< 1 carat), if so, then it makes a simple prediction about 
+# the log_price being equal to 8.3 (~ $4,000). Basically the tree found a patter for 
+# us that says, if a diamond in our dataset is less than 1 carat, it's probably valued 
+# at something close to $4,000. The insights get much richer for larger diamonds. 
+# For example, if the diamond is less than 1.4 carats but greater than 1 carat the model 
+# considers whether it has clarity=SI1 or VS2, if so then it's only valued at $6,000 
+# instead of $9,000 when it has a better clarity than those. 
+
+# Because a tree is easy to visualize and comes up with easy to understand complex 
+# relationships people tend to use them more often. However, let's see how the 
+# models compare by looking at the mean absolute percentage error (MAPE) on the test set. 
+
+
+# comparing the regression and decision tree models ----------------------------
+
+# First, let's build the models considering the same set of potential (candidate) variables 
+
+reg_model <- step(lm(log_price ~ log_carat_weight + cut + color + clarity + report, 
+                  data = diamond_dat_train), trace = 0)
+
+tree_model <- rpart(log_price ~ log_carat_weight + cut + color + clarity + report, 
+                    data = diamond_dat_train)
+
+# Second, let's predict values of the test dataset using the models. The "predict()" 
+# function in R will use the model to generate a prediction for you.
+
+reg_predictions <- predict(reg_model, newdata=diamond_dat_test)
+tree_predictions <- predict(tree_model, newdata=diamond_dat_test)
+
+# You can get a sense for the difference just by looking at the first few 
+head(reg_predictions)
+head(tree_predictions)
+
+# Before we proceed we need to convert the log prices back to real prices by 
+# taking the exponent of the prediction
+reg_predictions <- exp(reg_predictions)
+tree_predictions <- exp(tree_predictions)
+
+# Now let's calculate the MAPE for each model
+reg_mape <- mean(abs(reg_predictions - diamond_dat_test$price) / diamond_dat_test$price)
+message(sprintf("MAPE for the Regression Model: %1.2f%%", reg_mape*100))
+
+tree_mape <- mean(abs(tree_predictions - diamond_dat_test$price) / diamond_dat_test$price)
+message(sprintf("MAPE for the Decision Tree Model: %1.2f%%", tree_mape*100))
+
+# It looks like the regression model won! It had a 7.77% MAPE while the tree had 
+# a MAPE equal to 18.20%. 
+
+# Congratulations! You have learned how to build two different predictive models, 
+# make predictions, and figure which one is better to use. The process we've shown 
+# here is very similar to the type of work that data scientists do on a daily basis. 
 
-
-diamond <- diamond %>%
-  mutate(Clarity = as.factor(Clarity), 
-         Dataset = as.factor(Dataset), 
-         Cut = as.factor(ifelse(Cut == "Signature-Ideal",
-                                "SignatureIdeal", 
-                                as.character(Cut))),
-         Cut = as.factor(ifelse(Cut == "Very Good", 
-                                "VeryGood", 
-                                as.character(Cut))),
-         LPrice = log(Price),
-         LCarat = log(Carat.Weight),
-         recipCarat = 1 / Carat.Weight,
-         Caratbelow1 = as.numeric(Carat.Weight < 1),
-         Caratequal1 = as.numeric(Carat.Weight == 1),
-         Caratbelow1.5 = as.numeric((Carat.Weight > 1) & (Carat.Weight < 1.5)),
-         Caratequal1.5 = as.numeric(Carat.Weight == 1.5),
-         Caratbelow2 = as.numeric((Carat.Weight > 1.5) & (Carat.Weight < 2)),
-         Caratabove2 = as.numeric(Carat.Weight >= 2))
-
-summary(diamond)
-
-
-#' Here we will create several dummy variables, interaction terms, and split the 
-#' data into the training and test set. The process of creating additional variables 
-#' for analysis is typically referred to as "feature engineering". Feature engineering 
-#' helps to find more nuanced relationships and usually leads to improved accuracy in 
-#' predictive models
-
-#+ 
-dummies <- model.matrix(~ 0 + Cut + Color + Clarity + Polish + Symmetry + Report + 
-                              Cut:Color + Cut:Clarity + Cut:Polish + Cut:Symmetry + Cut:Report +
-                              Color:Clarity + Color:Polish + Color:Symmetry + Color:Report+
-                              Polish:Symmetry + Polish:Report + Symmetry:Report, 
-                        data = diamond)
-
-diamond.full <- as.data.frame(cbind(diamond, dummies))
-
-diamond.train <- diamond[diamond$Dataset == "Train",]
-diamond.test <- diamond[diamond$Dataset == "Test",]
-
-diamond.full.train <- diamond.full[diamond.full$Dataset == "Train",]
-diamond.full.test <- diamond.full[diamond.full$Dataset == "Test",]
-
-
-#' We will also split the data into a smaller training set and a validation set.
-
-#+ 
-nTrain <- dim(diamond.train)[1]
-(nSmallTrain <- round(nrow(diamond.train) * 0.75))
-(nValid <- nTrain - nSmallTrain)
-
-rowIndicesSmallerTrain <- sample(1:nTrain, size = nSmallTrain, replace = FALSE)
-
-diamond.smaller.train <- diamond.train[rowIndicesSmallerTrain, ]
-diamond.validation <- diamond.train[-rowIndicesSmallerTrain, ]
-
-diamond.full.smaller.train <- diamond.full.train[rowIndicesSmallerTrain, ]
-diamond.full.validation <- diamond.full.train[-rowIndicesSmallerTrain, ]
-
-
-#' # Data Visualization
-#' 
-#' An initial scatterplot of the Price vs. Carat Weight shows that Carat Weight typically 
-#' falls into distinct buckets, and that there are significant heteroskedasticity in 
-#' the relationship. 
-
-#+ plot-carat-and-price
-plot(x=diamond$Carat.Weight, y=diamond$Price, 
-     main="Price vs. Carat", 
-     ylab="Price", xlab="Carat")
-
-
-#' Our second scatterplot of the Log Price vs. Carat Weight shows a quadratic relationship. 
-#' Furthermore, the heteroskedasticity issue is now fixed.
-
-#+ plot-carat-and-log-price
-plot(x=diamond$Carat.Weight, y=diamond$LPrice, 
-     main="Log Price vs. Carat", 
-     ylab="Log Price", xlab="Carat")
-
-
-#' Finally, our last scatterplot of Log Price vs. Log Carat Weight shows a linear 
-#' relationship with little heteroskedasticity. We will adopt this equation for our 
-#' model. For more visualization, see the posted Tableau file.
-#' 
-#' Note that I currently encounter the IOPub data rate exceeded error below so the 
-#' chart does not show up in the output. The tableau file does have the chart though.
-
-#+ plot-log-carat-and-log-price
-plot(x=diamond$LCarat, y=diamond$LPrice, 
-     main="Log Price vs. Log Carat", 
-     ylab="Log Price", xlab="Log Carat")
-
-
-#' # Building Predictive Models
-#' 
-#' ## Tree-based models
-#' 
-#' Here we utilize several tree-based model to predict log price of the diamonds 
-#' based on several characteristics present in the data.
-#' 
-#' ### Single Tuned Tree
-#' 
-#' Our initial tuned tree (best cp is around 0.00000151859) yields a MAPE of 7.0% 
-#' when applied to the validation set. The importance variable list shows that log 
-#' carat size, inverse of carat size, as well as the bins of carat size are all 
-#' quite significant variables in predicting price.
-#' 
-#' Note that throughout our modeling analysis we will utilize a common model specification 
-#' that each process with start with when fitting.
-
-#+ define-common-model-formula
-model_formula <- "LPrice ~ LCarat +  recipCarat + Cut + Color + Clarity + Polish + Symmetry + 
-                           Report + Caratbelow1 + Caratequal1 + Caratbelow1.5 +
-                           Caratequal1.5 + Caratbelow2 + Caratabove2"
-
-
-#+ autofitting-rpart-tree
-rt.auto.cv <- rpart(model_formula, data = diamond.train, 
-                    control = rpart.control(cp = 0.000001, xval = 10))  # xval is number of folds in the K-fold cross-validation.
-#printcp(rt.auto.cv)  # Print out the cp table of cross-validation errors.
-
-#The R-squared for a regression tree is 1 minus rel error. 
-#xerror (or relative cross-validation error where "x" stands for "cross") is a scaled 
-#version of overall average of the 5 out-of-sample MSEs across the 5 folds. 
-#For the scaling, the MSE's are divided by the "root node error" of 0.091868, 
-#which is the variance in the y's. 
-#xstd measures the variation in xerror between the folds. nsplit is the number of terminal nodes minus 1.
-
-plotcp(rt.auto.cv)  # The horizontal line in this plot is one standard deviation above 
-# the minimum xerror value in the cp table. Because simpler trees are better, 
-# the convention is to choose the cp level to the left of the cp level with the 
-# minimum xerror that is first above the line. 
-
-# In this case, the minimum xerror is 0.3972833 at row 35 in the cp table.
-rt.auto.cv.table <- as.data.frame(rt.auto.cv$cptable)
-min(rt.auto.cv.table$xerror)
-bestcp <- rt.auto.cv.table$CP[rt.auto.cv.table$xerror==min(rt.auto.cv.table$xerror)]
-
-# According to this analysis using 5-fold cross-validation, setting cp = 0.002869198 is best. 
-# Take a look at the resulting 18-terminal-node tree.
-rt.tuned.opt.cv <- rpart(model_formula, data = diamond.train, 
-                         control = rpart.control(cp = bestcp))
-prp(rt.tuned.opt.cv, type = 1, extra = 1)
-importance <- as.data.frame(rt.tuned.opt.cv$variable.importance)
-importance
-
-
-#+ rpart-accuracy
-rt.tuned.opt.cv.pred <- predict(rt.tuned.opt.cv, diamond.test)
-accuracy(exp(rt.tuned.opt.cv.pred), diamond.test$Price)
-
-
-#' To facilitate some intuition of the variables, here we generate a few simpler trees 
-#' than the model above. These trees have much larger cp parameters and as such have 
-#' much fewer layers, which aids with interpretability.
-
-#+ fitting-simple-rpart-trees
-# fitting four simple trees using different complexity parameters
-rt.simple.tree1 <- rpart(model_formula, data = diamond.train, 
-                         control = rpart.control(cp = 0.005))
-rt.simple.tree2 <- rpart(model_formula, data = diamond.train, 
-                         control = rpart.control(cp = 0.001))
-rt.simple.tree3 <- rpart(model_formula, data = diamond.train, 
-                         control = rpart.control(cp = 0.0005))
-rt.simple.tree4 <- rpart(model_formula, data = diamond.train, 
-                         control = rpart.control(cp = 0.0001))
-
-
-#' Plots of the trees and diagnostics are available in the `output` folder of this analysis.
-
-#+ saving-off-rpart-data-and-pdfs, include=FALSE
-write.csv(rt.tuned.opt.cv.pred, 
-          file=here::here("output", todays_date_formatted, 
-                          sprintf("k-fold-optim-cp-reg-tree_%s.csv", todays_date_formatted)))
-write.csv(importance, 
-          file=here::here("output", todays_date_formatted, 
-                          sprintf("k-fold-optim-cp-reg-tree-var-imp_%s.csv", todays_date_formatted)))
-
-this_filename <- here::here("output", todays_date_formatted, 
-                            sprintf("optim-tuned-tree_%s.pdf", todays_date_formatted))
-cairo_pdf(file=this_filename, height=8.5, width=11)
-prp(rt.tuned.opt.cv, type = 1, extra = 1)
-dev.off()
-
-this_filename <- here::here("output", todays_date_formatted, 
-                            sprintf("simple-tree-1_%s.pdf", todays_date_formatted))
-cairo_pdf(file=this_filename, height=8.5, width=11)
-prp(rt.simple.tree1, type = 1, extra = 1)
-dev.off()
-
-this_filename <- here::here("output", todays_date_formatted, 
-                            sprintf("simple-tree-2_%s.pdf", todays_date_formatted))
-cairo_pdf(file=this_filename, height=8.5, width=11)
-prp(rt.simple.tree2, type = 1, extra = 1)
-dev.off()
-
-this_filename <- here::here("output", todays_date_formatted, 
-                            sprintf("simple-tree-3_%s.pdf", todays_date_formatted))
-cairo_pdf(file=this_filename, height=8.5, width=11)
-prp(rt.simple.tree3, type = 1, extra = 1)
-dev.off()
-
-this_filename <- here::here("output", todays_date_formatted, 
-                            sprintf("simple-tree-4_%s.pdf", todays_date_formatted))
-cairo_pdf(file=this_filename, height=8.5, width=11)
-prp(rt.simple.tree4, type = 1, extra = 1)
-dev.off()
-
-
-#' ### Bagged Tree
-#' 
-#' The second tree-based method is a bagged tree, which we implement with the `randomForest()` 
-#' function and the `mtry` argument set equal to 5 - the number of explanatory 
-#' variables feed into the model.
-
-#+  bagged-tree-on-train-dataset
-#bag with smaller train dataset#
-bag.tree <- randomForest(as.formula(model_formula), 
-                         data=diamond.smaller.train, mtry=5, ntree=100,
-                         importance=TRUE)
-bag.tree.pred.valid <- predict(bag.tree, newdata=diamond.validation)
-accuracy(exp(bag.tree.pred.valid), diamond.validation$Price)
-
-
-#' This bagged tree yields a MAPE of 5.57% on the validation set, already a great 
-#' improvement from the 7.0% of the single tuned tree. Given the improvement of the 
-#' bagged tree, we could estimate the bagged tree on the full training set by feeding 
-#' that dataset to the `randomForest()` function like so:
-
-#+ bagged-tree-on-full-dataset, eval=FALSE
-bag.tree <- randomForest(as.formula(model_formula), 
-                         data=diamond.train, mtry=5, ntree=100,
-                         importance=TRUE)
-
-
-#' ### Random Forest
-#' 
-#' The third tree-based model we implement is a cross validated random forest, which 
-#' decorrelates the tree and should provide additional improvements over the bagged 
-#' tree method.
-
-#+ prepare-data-for-rf-cv-training
-# k-folds cross validation automatically using rfcv
-trainx <- diamond.smaller.train[,c("LCarat", "recipCarat", "Cut", "Color", "Clarity", "Polish", "Symmetry",
-                                  "Report", "Caratbelow1", "Caratequal1", "Caratbelow1.5","Caratequal1.5", 
-                                  "Caratbelow2", "Caratabove2")]
-trainy <- diamond.smaller.train$LPrice
-random.forest.cv <- rfcv(trainx, trainy,
-                         cv.folds = 10, scale="unit", step=-1, ntree=100)
-plot(x=1:14, y=rev(random.forest.cv$error.cv),
-     xlab="mtry parameter", ylab="Cross Validation Error",
-     main="Random Forest Cross Validation Results")
-
-
-#' The cross validation results above shows that the best number of `mtry` for random 
-#' forest should be 9 (vs. 14). We will use this value when estimating our random 
-#' forest model.
-
-#+ check-best-rf-cv-error
-random.forest.cv$error.cv[random.forest.cv$error.cv==min(random.forest.cv$error.cv)]
-
-
-#+ fit-the-final-rf-model
-random.forest.cv.1 <- randomForest(as.formula(model_formula), 
-                                   data=diamond.smaller.train, mtry=9, ntree=100,
-                                   importance=TRUE)
-random.forest.cv.1.pred.valid <- predict(random.forest.cv.1, newdata=diamond.validation)
-accuracy(exp(random.forest.cv.1.pred.valid), diamond.validation$Price)
-
-
-#' Finally, we can repeat the same procedures above on the full training set.
-
-#+  eval=FALSE
-# perform cross validation to tune the model parameters
-trainx <- diamond.train[,c("LCarat", "recipCarat", "Cut", "Color", "Clarity", "Polish", "Symmetry",
-                           "Report", "Caratbelow1", "Caratequal1", "Caratbelow1.5","Caratequal1.5", 
-                           "Caratbelow2", "Caratabove2")]
-trainy <- diamond.train$LPrice
-random.forest.cv <- rfcv(trainx, 
-                         trainy,
-                         cv.folds=10, scale="unit", step=-1, ntree=100)
-
-# determine the best fitting model
-random.forest.cv$error.cv
-length(random.forest.cv$error.cv)
-plot(x=1:14, y=rev(random.forest.cv$error.cv),
-     xlab="mtry parameter", ylab="Cross Validation Error",
-     main="Random Forest Cross Validation Results")
-random.forest.cv$error.cv[random.forest.cv$error.cv==min(random.forest.cv$error.cv)]
-
-# use the optimal parameters to fit the final model
-random.forest.cv.1 <- randomForest(as.formula(model_formula), 
-                                   data=diamond.train, mtry=9, ntree=100,
-                                   importance=TRUE)
-# measure the accuracy
-random.forest.cv.1.pred <- predict(random.forest.cv.1, newdata=diamond.test)
-accuracy(exp(random.forest.cv.1.pred), diamond.test$Price)
-
-
-#' ### Boosted Trees
-#' 
-#' The last tree-based model we will be using is a boosted tree model. We use cross 
-#' validation to identify the best value for the parameter `n.trees`, which turns out 
-#' to be 5,207.
-
-#+ 
-boost <- gbm(as.formula(model_formula), data=diamond.smaller.train,
-             distribution = "gaussian",
-             n.trees=100, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
-plot(boost$cv.error)
-best_iteration <- which(boost$cv.error==min(boost$cv.error))
-
-
-#' Using this `n.trees` parameter, we estimate the model on the smaller training set using 
-#' 100 iterations, which yields a MAPE of 4.46% on the validation set, representing additional 
-#' improvements over the random forest model. It looks like the model is continually getting 
-#' better even at the 100th iteration. More iterations might help us find the true 
-#' optimum number of trees to minimize prediction error.
-
-#+ 
-boost.cv <- gbm(as.formula(model_formula), data=diamond.smaller.train,
-                distribution = "gaussian",
-                n.trees=best_iteration, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
-boost.cv.pred.valid <- predict(boost.cv, newdata=diamond.validation, n.trees=best_iteration)
-accuracy(exp(boost.cv.pred.valid), diamond.validation$Price)
-
-
-#' Finally, we repeat the same procedures above using the full dataset, including 
-#' cross validation. Cross validation shows that 100 is the best value for `n.trees`, 
-#' and using this parameter yields a MAPE of 4.23808% on the test set.
-
-#+  eval=FALSE
-boost <- gbm(as.formula(model_formula), data=diamond.train,
-             distribution = "gaussian",
-             n.trees=100, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
-best_iteration <- which(boost$cv.error==min(boost$cv.error))
-boost.cv <- gbm(as.formula(model_formula), data=diamond.train,
-                distribution = "gaussian",
-                n.trees=best_iteration, interaction.depth=6, cv.folds=10, shrinkage = 0.011)
-boost.cv.pred <- predict(boost.cv, newdata=diamond.test, n.trees=best_iteration)
-accuracy(exp(boost.cv.pred), diamond.test$Price)
-
-
-#' ## Regression Models
-#' 
-#' Another class of model we could use is linear regression model. In this section 
-#' we will use several approaches to calibrate our linear regression model.
-#' 
-#' ### Backward Step-Wise Linear Regression
-#' 
-#' We start by including all categorical variables & possible interactions in our 
-#' linear model. This yields a MAPE of 5.34222% on the validation set.
-
-#+ define-lm-formula
-lm_formula <- "LPrice ~ LCarat+recipCarat+Caratbelow1+Caratequal1+Caratbelow1.5+Caratequal1.5+Caratbelow2+Caratabove2+CutFair+CutGood+CutIdeal+CutSignatureIdeal+CutVeryGood+ColorE+ColorF+ColorG+ColorH+ColorI+ClarityIF+ClaritySI1+ClarityVS1+ClarityVS2+ClarityVVS1+ClarityVVS2+PolishG+PolishID+PolishVG+SymmetryG+SymmetryID+SymmetryVG+ReportGIA+CutGood:ColorE+CutIdeal:ColorE+CutSignatureIdeal:ColorE+CutVeryGood:ColorE+CutGood:ColorF+CutIdeal:ColorF+CutSignatureIdeal:ColorF+CutVeryGood:ColorF+CutGood:ColorG+CutIdeal:ColorG+CutSignatureIdeal:ColorG+CutVeryGood:ColorG+CutGood:ColorH+CutIdeal:ColorH+CutSignatureIdeal:ColorH+CutVeryGood:ColorH+CutGood:ColorI+CutIdeal:ColorI+CutSignatureIdeal:ColorI+CutVeryGood:ColorI+CutGood:ClarityIF+CutIdeal:ClarityIF+CutSignatureIdeal:ClarityIF+CutVeryGood:ClarityIF+CutGood:ClaritySI1+CutIdeal:ClaritySI1+CutSignatureIdeal:ClaritySI1+CutVeryGood:ClaritySI1+CutGood:ClarityVS1+CutIdeal:ClarityVS1+CutSignatureIdeal:ClarityVS1+CutVeryGood:ClarityVS1+CutGood:ClarityVS2+CutIdeal:ClarityVS2+CutSignatureIdeal:ClarityVS2+CutVeryGood:ClarityVS2+CutGood:ClarityVVS1+CutIdeal:ClarityVVS1+CutSignatureIdeal:ClarityVVS1+CutVeryGood:ClarityVVS1+CutGood:ClarityVVS2+CutIdeal:ClarityVVS2+CutSignatureIdeal:ClarityVVS2+CutVeryGood:ClarityVVS2+CutGood:PolishG+CutIdeal:PolishG+CutSignatureIdeal:PolishG+CutVeryGood:PolishG+CutGood:PolishID+CutIdeal:PolishID+CutSignatureIdeal:PolishID+CutVeryGood:PolishID+CutGood:PolishVG+CutIdeal:PolishVG+CutSignatureIdeal:PolishVG+CutVeryGood:PolishVG+CutGood:SymmetryG+CutIdeal:SymmetryG+CutSignatureIdeal:SymmetryG+CutVeryGood:SymmetryG+CutGood:SymmetryID+CutIdeal:SymmetryID+CutSignatureIdeal:SymmetryID+CutVeryGood:SymmetryID+CutGood:SymmetryVG+CutIdeal:SymmetryVG+CutSignatureIdeal:SymmetryVG+CutVeryGood:SymmetryVG+CutGood:ReportGIA+CutIdeal:ReportGIA+CutSignatureIdeal:ReportGIA+CutVeryGood:ReportGIA+ColorE:ClarityIF+ColorF:ClarityIF+ColorG:ClarityIF+ColorH:ClarityIF+ColorI:ClarityIF+ColorE:ClaritySI1+ColorF:ClaritySI1+ColorG:ClaritySI1+ColorH:ClaritySI1+ColorI:ClaritySI1+ColorE:ClarityVS1+ColorF:ClarityVS1+ColorG:ClarityVS1+ColorH:ClarityVS1+ColorI:ClarityVS1+ColorE:ClarityVS2+ColorF:ClarityVS2+ColorG:ClarityVS2+ColorH:ClarityVS2+ColorI:ClarityVS2+ColorE:ClarityVVS1+ColorF:ClarityVVS1+ColorG:ClarityVVS1+ColorH:ClarityVVS1+ColorI:ClarityVVS1+ColorE:ClarityVVS2+ColorF:ClarityVVS2+ColorG:ClarityVVS2+ColorH:ClarityVVS2+ColorI:ClarityVVS2+ColorE:PolishG+ColorF:PolishG+ColorG:PolishG+ColorH:PolishG+ColorI:PolishG+ColorE:PolishID+ColorF:PolishID+ColorG:PolishID+ColorH:PolishID+ColorI:PolishID+ColorE:PolishVG+ColorF:PolishVG+ColorG:PolishVG+ColorH:PolishVG+ColorI:PolishVG+ColorE:SymmetryG+ColorF:SymmetryG+ColorG:SymmetryG+ColorH:SymmetryG+ColorI:SymmetryG+ColorE:SymmetryID+ColorF:SymmetryID+ColorG:SymmetryID+ColorH:SymmetryID+ColorI:SymmetryID+ColorE:SymmetryVG+ColorF:SymmetryVG+ColorG:SymmetryVG+ColorH:SymmetryVG+ColorI:SymmetryVG+ColorE:ReportGIA+ColorF:ReportGIA+ColorG:ReportGIA+ColorH:ReportGIA+ColorI:ReportGIA+PolishG:SymmetryG+PolishID:SymmetryG+PolishVG:SymmetryG+PolishG:SymmetryID+PolishID:SymmetryID+PolishVG:SymmetryID+PolishG:SymmetryVG+PolishID:SymmetryVG+PolishVG:SymmetryVG+PolishG:ReportGIA+PolishID:ReportGIA+PolishVG:ReportGIA+SymmetryG:ReportGIA+SymmetryID:ReportGIA+SymmetryVG:ReportGIA
-          + LCarat:Cut + LCarat:Color + LCarat:Calarity + LCarat:Polish + LCarat:Symmetry + LCarat:Report
-          + Caratbelow1:Cut + Caratbelow1:Color + Caratbelow1:Calarity + 
-            Caratbelow1:Polish + Caratbelow1:Symmetry + Caratbelow1:Report"
-
-
-#+ fit-lm
-lm <- lm(as.formula(lm_formula), data = diamond.full.smaller.train)
-summary(lm)
-
-
-#+ eval-lm-model
-lm.pred.valid <- predict(lm, diamond.full.validation)
-accuracy(exp(lm.pred.valid), diamond.full.validation$Price)
-
-
-#' Here we will perform the step-wise backward regression by doing at most 
-#' 10 steps to weed out the variables that are not considered significant. More 
-#' steps may be needed to find the optimum model. The argument `trace=0` means that 
-#' the diagnostics of each step are not printed to the screen.
-
-#+ perform-stepwise-regression
-lm.step <- step(lm, direction = "backward", trace=0, step=10)
-lm.step.pred <- predict(lm.step, diamond.full.test)
-accuracy(exp(lm.step.pred), diamond.full.test$Price)
-
-
-#' ### Lasso Regression
-#' 
-#' Another method we could use to choose which variable to include is the Lasso regression. 
-#' Here we use cross-validation to determine the best lambda parameter used in Lasso 
-#' regression to "regularize" the coefficients of the variables included. 
-
-#+ fit-lass0
-#smaller train dataset
-xtrain <- as.matrix(diamond.full.smaller.train[, -c(1:11)])
-ytrain <- as.vector(diamond.full.smaller.train$LPrice)
-xtest <- as.matrix(diamond.full.validation[, -c(1:11)])
-lm.regularized.cv <- cv.glmnet(xtrain, ytrain, 
-                               nfolds = 10, family = "gaussian", alpha=1)
-
-
-#+ 
-lm.regularized.cv$lambda.min
-(minLogLambda <- log(lm.regularized.cv$lambda.min))
-coef(lm.regularized.cv, s = "lambda.min")  
-plot(lm.regularized.cv, label = TRUE)
-abline(v = minLogLambda)
-
-
-#+ 
-lm.regularized <- glmnet(xtrain, ytrain, family = "gaussian", 
-                         lambda=lm.regularized.cv$lambda.min)
-plot(lm.regularized, xvar = "lambda", label = TRUE)
-
-
-#+ 
-lm.regularized.cv.pred.valid <- predict(lm.regularized.cv, newx = xtest, s = "lambda.min") 
-lm.regularized.pred.valid <- predict(lm.regularized, newx = xtest, s = "lambda.min") 
-
-
-#+ 
-accuracy(exp(as.ts(lm.regularized.cv.pred.valid)), as.ts(diamond.full.validation$Price))
-accuracy(exp(as.ts(lm.regularized.pred.valid)), as.ts(diamond.full.validation$Price))
-
-
-#+ 
-#full dataset
-xtrain <- as.matrix(diamond.full.train[, -c(1:11)])
-ytrain <- as.vector(diamond.full.train$LPrice)
-xtest <- as.matrix(diamond.full.test[, -c(1:11)])
-lm.regularized.cv <- cv.glmnet(xtrain, ytrain, 
-                               nfolds = 10, family = "gaussian", alpha=1)  # Fits the Lasso.
-
-
-#+ 
-lm.regularized.cv$lambda.min
-(minLogLambda <- log(lm.regularized.cv$lambda.min))
-coef(lm.regularized.cv, s = "lambda.min")  
-plot(lm.regularized.cv, label = TRUE)
-abline(v = minLogLambda)
-
-
-#+ 
-lm.regularized <- glmnet(xtrain, ytrain, family = "gaussian", 
-                         lambda=lm.regularized.cv$lambda.min)
-plot(lm.regularized, xvar = "lambda", label = TRUE)
-
-
-#+ 
-lm.regularized.cv.pred <- predict(lm.regularized.cv, newx = xtest, s = "lambda.min") 
-lm.regularized.pred <- predict(lm.regularized, newx = xtest, s = "lambda.min") 
-head(lm.regularized.cv.pred)
-head(lm.regularized.pred)
-head(as.numeric(exp(lm.regularized.cv.pred)))
-head(as.numeric(diamond.full.validation$Price))
-accuracy(as.numeric(exp(lm.regularized.cv.pred)), as.numeric(diamond.full.test$Price))
-accuracy(as.numeric(exp(lm.regularized.pred)), as.numeric(diamond.full.test$Price))
-
-
-#' ## Ensemble Forecasts
-#' 
-#' Among the methods above, we have identified a few models that yield MAPE less 
-#' than 11% on the validation set. 
-
-#+ 
-accuracy((exp(bag.tree.pred.valid)), diamond.full.validation$Price)
-accuracy((exp(random.forest.cv.1.pred.valid)), diamond.full.validation$Price)
-accuracy((exp(boost.cv.pred.valid)), diamond.full.validation$Price)
-accuracy((exp(lm.pred.valid)), diamond.full.validation$Price)
-accuracy((exp(lm.step.pred)), diamond.full.validation$Price)
-accuracy(as.numeric((exp(lm.regularized.pred.valid))), diamond.full.validation$Price)
-
-
-#+ 
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid))/2, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid))/2, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid))/2, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(lm.step.pred))/2, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
-
-
-#+ 
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid))/2, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid))/2, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.step.pred))/2, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
-
-
-#+ 
-accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid))/2, diamond.full.validation$Price)
-accuracy(((exp(boost.cv.pred.valid))+exp(lm.step.pred))/2, diamond.full.validation$Price)
-accuracy(((exp(boost.cv.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
-
-
-#+ 
-accuracy(((exp(lm.pred.valid))+exp(lm.step.pred))/2, diamond.full.validation$Price)
-accuracy(((exp(lm.pred.valid))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
-accuracy(((exp(lm.step.pred))+as.numeric(exp(lm.regularized.pred.valid)))/2, diamond.full.validation$Price)
-
-
-#+ 
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid))/3, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.pred.valid))/3, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
-
-
-#+ 
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid))/3, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
-
-
-#+ 
-accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
-
-
-#+ 
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid))/3, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
-
-
-#+ 
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
-
-
-#+ 
-accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred))/3, diamond.full.validation$Price)
-accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
-accuracy(((exp(boost.cv.pred.valid))+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
-accuracy(((exp(lm.pred.valid))+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/3, diamond.full.validation$Price)
-
-
-#+ 
-head(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid))/3)
-head((exp(random.forest.cv.1.pred.valid)))
-
-
-#+ 
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid))/4, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.step.pred))/4, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred))/4, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-
-
-#+ 
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred))/4, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-
-
-#+ 
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred))/4, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-accuracy(((exp(boost.cv.pred.valid))+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/4, diamond.full.validation$Price)
-
-
-#+ 
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.step.pred)))/5, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
-
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
-accuracy(((exp(bag.tree.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
-accuracy(((exp(random.forest.cv.1.pred.valid))+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+exp(lm.step.pred)+as.numeric(exp(lm.regularized.pred.valid)))/5, diamond.full.validation$Price)
-
-
-#+ 
-accuracy(((exp(bag.tree.pred.valid))+exp(random.forest.cv.1.pred.valid)+exp(boost.cv.pred.valid)+exp(lm.pred.valid)+as.numeric(exp(lm.step.pred))+as.numeric(exp(lm.regularized.pred.valid)))/6, diamond.full.validation$Price)
-
-
-#' # Summary of Analysis & Areas for Further Research
-#' 
-#' A few key conclusions are worth noting after our analysis of the data:
-#' 
-#' (1) Best model for predicting diamond prices is a boosted tree model, which gives MAPE of 4.23%
-#' 
-#' (2) Given the scatter plot between price and carat weight, the log-log relationship makes the most sense
-#' 
-#' (3) Although we include log(carat weight) and 1/carat weight as explanatory variables, there seem to be distinct clusters of prices based on ranges of carat weights, as the bin dummies based on carat weight we created were m
-#' 
-#' (4) Though tree-based models tend to outperform linear regression models, they lose out on model intepretability. In particular, it is a lot easier to get an estimate of the marginal effect of a specific attribute on diamond price with a linear regression model vs. a tree-based model.
-#' 
-#' (5) That said, using a tree-based model to help determine which variables and interaction terms to include as a start in a linear regression appears to be fruitful.
