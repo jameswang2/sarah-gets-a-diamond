@@ -1,81 +1,32 @@
-#' ---
-#' title: "Sarah Gets a Diamond"
-#' author: "Dang Trinh - April 11, 2018"  
-#' output: 
-#'   github_document: 
-#'     toc: true
-#'     toc_depth: 3
-#' ---
 
-#+ setup, include=FALSE
-knitr::opts_chunk$set(echo = TRUE, cache = TRUE, warning = FALSE, message = FALSE)
+# WARNING: This script assumes that you have some basic knowledge about how to 
+# run R code. If you do not have a very good understanding, you can quickly learn 
+# by reviewing R script used in the Intro to R Programming. The link to that file 
+# is: https://github.com/DardenDSC/intro-to-r-programming/blob/master/script.R
 
 
-#' # Environment Setup
-#' 
-#' R is an open source programming language that allows users to extend R by writing 
-#' "packages". These packages usually perform a very complex and specific set of 
-#' functions that we would like to utilize in our script. For example, the **gbm** 
-#' package allows us to fit boosted tree predictive models. 
-#' 
-#' You can load a package by using the `library()` function as shown below, but you 
-#' must first install the package. You can install a package by using the `install.packages()` 
-#' function like so:
-
-#+ install-packages, eval=FALSE
-install.packages("gbm")
+# install R packages if you don't already have them ----------------------------
+install.packages("tidyverse")
+install.packages("glmnet")
+install.packages("rpart")
+install.packages("randomForest")
 
 
-#' After installing all of the packages listed below, then load them up by running 
-#' this block of code. It is always a good idea to load all the required packages 
-#' at the beginning of your script so that others can know what packages they need 
-#' to replicate your analysis.
-
-#+ load-packages
+# setup your R environment -----------------------------------------------------
 options(scipen=999, digits=6)
-library(here)
-library(Lahman)
-library(lubridate)
-library(forecast)
-library(dplyr)
-library(tidyr)
-library(zoo)
-library(glmnet)
-library(tseries)
-library(rpart)
-library(rpart.plot)
-library(glmnet)
-library(forecast)
-library(MASS)
-library(randomForest)
-library(gbm)
-#library(prophet)
-#library(vars)
-#library(tree)
+suppressMessages(library(tidyverse))
+suppressMessages(library(glmnet))
+suppressMessages(library(rpart))
+suppressMessages(library(randomForest))
 
+# read the data ----------------------------------------------------------------
+raw_diamond_dat <- read_csv("https://raw.githubusercontent.com/DardenDSC/sarah-gets-a-diamond/master/data/diamond-data.csv", 
+                            col_types = cols())
 
-#+ create-output-folder
-# create a folder to save our analyses, underlying data
-todays_date_formatted <- format(Sys.Date(), '%Y%m%d')
-dir.create(here::here('output', todays_date_formatted), showWarnings = FALSE)
-
-
-#' # Data Wrangling
-#' 
-#' Data is usually not in a format that is ready for analysis, so we go through a number 
-#' of steps that shape the data into a format that R can use for running analysis. We 
-#' first read in the data and explore the various variables. The dataset contains 
-#' several key attributes of diamond: carat, cut, color, clarity, polish, and symmetry. 
-#' The `summary()` gives a quick idea of what they data entails.
-
-#+ load-data
-# read the data from github
-data_url <- 'https://raw.githubusercontent.com/DardenDSC/sarah-gets-a-diamond/master/data/sarah-gets-a-diamond-raw-data.csv'
-raw_diamond_dat <- read.csv(data_url)
-
-# get a sense for what the data entails
-summary(raw_diamond_dat)
-
+# create a new variable to keep the raw data separate
+# this way we always have an original copy of the data to fall back on in case 
+# we make any mistakes while messing with a formatted copy
+diamond_dat <- raw_diamond_dat
 
 #' To facilitate subsequent regressions, we will do a minor cleaning of the `cut`
 #' variable to remove the space and the hyphen in its values ("Signature-Ideal" and 
@@ -84,8 +35,7 @@ summary(raw_diamond_dat)
 #' based on a subsequent scatter plot between price and carat weight.
 
 #+ prepare-variables-for-modeling
-# create a new variable to keep the raw data separate
-diamond <- raw_diamond_dat
+
 
 diamond <- diamond %>%
   mutate(Clarity = as.factor(Clarity), 
