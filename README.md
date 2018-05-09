@@ -6,9 +6,7 @@ the right diamond for his bride-to-be, Sarah.
 
 ## Table of Contents
  - [Following Along](#following-along)
- - [System Setup](#system-setup)
-   - [Installing R and RStudio](#installing-r-and-rstudio)
-   - [Installing R Packages](#installing-r-packages)
+ - [Installing R Packages](#installing-r-packages)
  - [The Data](#the-data)
  - [Source](#source)
  
@@ -24,7 +22,7 @@ session:
 If you need instructions on how to setup your computer go here: 
 https://github.com/DardenDSC/intro-to-r-programming#installing-r-and-rstudio
  
-#### Installing R Packages
+### Installing R Packages
 R uses "packages" of functions that people develop to perform very specific 
 routines in R, like fitting a decision tree. These packages must be installed before 
 referencing them, so in order to run code in this repository you must first open 
