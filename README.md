@@ -1,4 +1,4 @@
-# Sarah Gets A Diamond <img src="doc/diamonds.png" width="400px" align="right" />
+# Sarah Gets A Diamond<img src="doc/diamonds.png" width="400px" align="right" />
 A repository of R code regarding ways to analyze data from the *Sarah Gets a Diamond* 
 case (UVA-QA-0702) presented in the First Year Decision Analysis course at Darden. 
 The basis for the data is a case regarding a hopeless romantic MBA student choosing 
@@ -67,3 +67,5 @@ a basis for class discussion rather than to illustrate effective or ineffective
 handling of a romantic situation. Copyright (c) 2007 by the University of Virginia 
 Darden School Foundation, Charlottesville, VA. All rights reserved. To order 
 copies, send an e-mail to sales@dardenbusinesspublishing.com
+
+[Top](#sarah-gets-a-diamond)
